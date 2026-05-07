@@ -56,11 +56,11 @@ GuessRecord = tuple[PokemonEntry, list[HintRecord]]
 
 console = Console()
 
-# Hint label → icon mapping
-HINT_ICON = {"exact": "✅", "partial": "🟡", "close": "🟡", "miss": "❌", "far": "⬛"}
+# Hint label → icon mapping (matches web version: success/warning/info)
+HINT_ICON = {"exact": "●", "partial": "◐", "close": "◐", "miss": "○", "far": "○"}
 HINT_COLOR = {"exact": "bold green", "partial": "bold yellow", "close": "bold yellow",
-              "miss": "bold red", "far": "bright_white"}
-ARROW_STYLE = "bold cyan"
+              "miss": "dim", "far": "dim"}
+ARROW_STYLE = "dim"
 
 TYPE_CN_TO_EN_MAP = {
     "一般": "normal",
@@ -100,7 +100,7 @@ def show_logo() -> None:
 """
     console.print(Panel(
         Align.center(Text(logo, style="bold cyan")),
-        border_style="cyan", box=box.DOUBLE, padding=(0, 1),
+        border_style="dim", box=box.ROUNDED, padding=(0, 1),
     ))
 
 
@@ -137,15 +137,15 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
         header_keys += ["蛋组"]
 
     table = Table(
-        box=box.ROUNDED, border_style="bright_blue", show_header=True,
-        header_style="bold white on dark_blue",
+        box=box.SIMPLE_HEAVY, border_style="dim", show_header=True,
+        header_style="bold white on grey23",
         title=f"📋 猜测记录 (第 {len(guesses_with_hints)}/{max_guesses} 次)",
         title_style="bold yellow",
     )
     table.add_column("#", style="dim", width=3, justify="right")
     table.add_column("宝可梦", style="bold", width=16)
     for k in header_keys:
-        table.add_column(k, width=8, justify="center")
+        table.add_column(k, width=10, justify="center")
 
     rows = guesses_with_hints
     if config.get("reverse_order"):
@@ -179,7 +179,7 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
 
 def show_game_stats(pokemon_count: int) -> None:
     """显示游戏统计面板"""
-    console.print(Panel(get_stats_summary(pokemon_count).strip(), border_style="yellow", title="📊 Stats"))
+    console.print(Panel(get_stats_summary(pokemon_count).strip(), border_style="dim", title="📊 Stats"))
 
 
 # ══════════════════════════════════════════════
@@ -318,7 +318,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             f"  输入宝可梦中文名/英文名/编号（支持模糊补全）\n"
             "  输入 [bold red]q[/bold red] 退出  |  [bold red]reveal[/bold red] 揭晓答案\n"
         ),
-        border_style="green", title="🎯 猜猜看",
+        border_style="dim", title="🎯 猜猜看",
     ))
 
     while len(guesses_with_hints) < max_guesses:
@@ -398,7 +398,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                     f"  用了 [bold yellow]{len(guesses_with_hints)}[/bold yellow] 次\n"
                     f"  耗时 [bold cyan]{elapsed:.0f}[/bold cyan] 秒"
                 ),
-                border_style="green", title="🏆 You Win!",
+                border_style="dim", title="🏆 You Win!",
             ))
             save_game_stats(True, len(guesses_with_hints))
             return
@@ -409,7 +409,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                     f"[bold red]😢 游戏结束！[/bold red]\n\n"
                     f"  答案是: [bold]{target['name']}[/bold] ({target['name_en']}) #{target['id']:04d}"
                 ),
-                border_style="red", title="💀 Game Over",
+                border_style="dim", title="💀 Game Over",
             ))
             save_game_stats(False, len(guesses_with_hints))
             return
