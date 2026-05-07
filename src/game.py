@@ -60,7 +60,8 @@ console = Console()
 HINT_ICON = {"exact": "", "partial": "", "close": "", "miss": "", "far": ""}
 HINT_COLOR = {"exact": "underline green", "partial": "bold yellow", "close": "bold yellow",
               "miss": "dim", "far": "dim"}
-ARROW_STYLE = "dim"
+ARROW_UP = "bold green"
+ARROW_DOWN = "bold red"
 
 TYPE_CN_TO_EN_MAP = {
     "一般": "normal",
@@ -122,7 +123,8 @@ def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
     else:
         _ = t.append(val, style=color)
     if extra and label != "属性":
-        _ = t.append(f" {extra}", style=ARROW_STYLE)
+        arrow_style = ARROW_UP if extra == "↑" else ARROW_DOWN
+        _ = t.append(f" {extra}", style=arrow_style)
     return t
 
 
@@ -146,15 +148,14 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
         title_style="bold yellow",
     )
     table.add_column("#", style="dim", width=3, justify="right")
-    table.add_column("宝可梦", style="bold", width=16)
+    table.add_column("中文名", style="bold", width=10)
+    table.add_column("英文名", style="dim", width=14)
     for k in header_keys:
         table.add_column(k, width=10, justify="center")
 
     rows = guesses_with_hints
-    if config.get("reverse_order"):
-        rows = list(reversed(rows))
 
-    for guess_poke, hints in rows:
+    for i, (guess_poke, hints) in enumerate(rows, 1):
         hint_dict: dict[str, tuple[str, str, str]] = {}
         for h in hints:
             if len(h) == 4:
@@ -164,11 +165,7 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
                 label, val, level = h
                 hint_dict[label] = (val, level, "")
 
-        name_cell = Text(f"{guess_poke['name']}", style="bold")
-        _ = name_cell.append(f"\n{guess_poke['name_en']}", style="dim")
-
-        row = [str(len(guesses_with_hints) if not config.get("reverse_order") else
-                    guesses_with_hints.index((guess_poke, hints)) + 1), name_cell]
+        row = [str(i), Text(guess_poke['name'], style="bold"), Text(guess_poke['name_en'])]
         for k in header_keys:
             if k in hint_dict:
                 val, level, extra = hint_dict[k]

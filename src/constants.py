@@ -56,6 +56,6 @@ DEFAULT_CONFIG: Dict[str, object] = {
     "show_more_appearance": False,
     "show_egg_group": False,
     "show_gen_arrow": True,
-    "reverse_order": True,
+    "reverse_order": False,
     "mischief": False,
 }
