@@ -57,9 +57,10 @@ GuessRecord = tuple[PokemonEntry, list[HintRecord]]
 console = Console()
 
 # Hint label → icon mapping
-HINT_ICON = {"exact": "✅", "partial": "🟡", "close": "🟡", "miss": "⬛", "far": "⬛"}
+HINT_ICON = {"exact": "✅", "partial": "🟡", "close": "🟡", "miss": "❌", "far": "⬛"}
 HINT_COLOR = {"exact": "bold green", "partial": "bold yellow", "close": "bold yellow",
-              "miss": "dim white", "far": "dim white"}
+              "miss": "bold red", "far": "bright_white"}
+ARROW_STYLE = "bold cyan"
 
 TYPE_CN_TO_EN_MAP = {
     "一般": "normal",
@@ -113,12 +114,12 @@ def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
             if idx > 0:
                 _ = t.append("/", style=color)
             type_key = TYPE_CN_TO_EN_MAP.get(type_name)
-            type_style = TYPE_COLORS[type_key] if type_key else color
+            type_style = TYPE_COLORS.get(type_key, color) if type_key else color
             _ = t.append(type_name, style=type_style)
     else:
         _ = t.append(val, style=color)
     if extra:
-        _ = t.append(f" {extra}", style=color)
+        _ = t.append(f" {extra}", style=ARROW_STYLE)
     return t
 
 
