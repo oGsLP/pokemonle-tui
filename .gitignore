@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# PokeAPI cache (fetched at runtime)
+.pokeapi_cache/
+
+# User-local data
+.game_config.json
+.game_stats.json
