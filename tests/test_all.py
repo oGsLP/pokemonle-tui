@@ -350,6 +350,47 @@ class TestComparison:
         assert egg_hint.level == "exact"
         assert egg_hint.value == "monster/grass"
 
+    def test_type_partial_match_only_matching_bolded(self):
+        """Target 草/龙, Guess 草/飞行 → only 草 in matched set"""
+        target = {"id": 103, "types": ["草", "龙"], "generation": "第一世代"}
+        guess = {"id": 357, "types": ["草", "飞行"], "generation": "第三世代"}
+        hints = compare_pokemon(target, guess, DEFAULT_CONFIG)
+        type_hint = next(h for h in hints if h.label == "属性")
+        matched = set(type_hint.arrow.split("/")) if type_hint.arrow else set()
+        assert "草" in matched
+        assert "飞行" not in matched
+        assert type_hint.value == "草/飞行"
+
+    def test_type_no_match_all_dimmed(self):
+        """Target 草/龙, Guess 水/火 → no match"""
+        target = {"id": 103, "types": ["草", "龙"], "generation": "第一世代"}
+        guess = {"id": 6, "types": ["水", "火"], "generation": "第一世代"}
+        hints = compare_pokemon(target, guess, DEFAULT_CONFIG)
+        type_hint = next(h for h in hints if h.label == "属性")
+        assert type_hint.level == "miss"
+        assert type_hint.value == "水/火"
+        assert type_hint.arrow is None
+
+    def test_type_single_vs_dual(self):
+        """Target 单属性(地面), Guess 双属性(地面/超能力) → only 地面 matched"""
+        target = {"id": 27, "types": ["地面"], "generation": "第一世代"}
+        guess = {"id": 122, "types": ["地面", "超能力"], "generation": "第二世代"}
+        hints = compare_pokemon(target, guess, DEFAULT_CONFIG)
+        type_hint = next(h for h in hints if h.label == "属性")
+        matched = set(type_hint.arrow.split("/")) if type_hint.arrow else set()
+        assert "地面" in matched
+        assert "超能力" not in matched
+
+    def test_type_both_match(self):
+        """Target 草/龙, Guess 草/龙 → both matched"""
+        target = {"id": 103, "types": ["草", "龙"], "generation": "第一世代"}
+        guess = {"id": 887, "types": ["草", "龙"], "generation": "第八世代"}
+        hints = compare_pokemon(target, guess, DEFAULT_CONFIG)
+        type_hint = next(h for h in hints if h.label == "属性")
+        matched = set(type_hint.arrow.split("/")) if type_hint.arrow else set()
+        assert "草" in matched
+        assert "龙" in matched
+
 
 # ══════════════════════════════════════════════
 #  Test: fuzzy.py
