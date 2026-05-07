@@ -109,15 +109,21 @@ def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
     icon = HINT_ICON.get(level, "")
     t = Text(icon, style=color) if icon else Text(style=color)
     if label == "属性" and val:
+        matched_types = set(extra.split("/")) if extra else set()
         for idx, type_name in enumerate(val.split("/")):
             if idx > 0:
                 _ = t.append("/", style=color)
             type_key = TYPE_CN_TO_EN_MAP.get(type_name)
             type_style = TYPE_COLORS.get(type_key, color) if type_key else color
-            _ = t.append(type_name, style=type_style)
+            if level == "partial" and type_name in matched_types:
+                _ = t.append(type_name, style=f"bold {type_style}")
+            elif level == "exact":
+                _ = t.append(type_name, style=f"underline {type_style}")
+            else:
+                _ = t.append(type_name, style=type_style)
     else:
         _ = t.append(val, style=color)
-    if extra:
+    if extra and label != "属性":
         _ = t.append(f" {extra}", style=ARROW_STYLE)
     return t
 

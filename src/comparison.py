@@ -46,7 +46,7 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigData)
         hints.append(Hint("属性", "/".join(target_types), "exact"))
     elif t1 & t2:
         matched = "/".join(sorted(t1 & t2))
-        hints.append(Hint("属性", "/".join(guess_types), "partial", f"含{matched}"))
+        hints.append(Hint("属性", "/".join(guess_types), "partial", matched))
     else:
         hints.append(Hint("属性", "/".join(guess_types), "miss"))
 
