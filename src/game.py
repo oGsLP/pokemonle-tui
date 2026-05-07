@@ -57,8 +57,8 @@ GuessRecord = tuple[PokemonEntry, list[HintRecord]]
 console = Console()
 
 # Hint label → icon mapping (matches web version: success/warning/info)
-HINT_ICON = {"exact": "", "partial": "", "close": "", "miss": "", "far": ""}
-HINT_COLOR = {"exact": "underline green", "partial": "bold yellow", "close": "bold yellow",
+HINT_ICON = {"exact": "✓ ", "partial": "", "close": "", "miss": "", "far": ""}
+HINT_COLOR = {"exact": "bold green", "partial": "bold yellow", "close": "bold yellow",
               "miss": "dim", "far": "dim"}
 ARROW_UP = "bold green"
 ARROW_DOWN = "bold red"
@@ -146,12 +146,14 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
         header_style="bold white on grey23",
         title=f"📋 猜测记录 (第 {len(guesses_with_hints)}/{max_guesses} 次)",
         title_style="bold yellow",
+        padding=(0, 1),
     )
     table.add_column("#", style="dim", width=3, justify="right")
     table.add_column("中文名", style="bold", width=10)
     table.add_column("英文名", style="dim", width=14)
     for k in header_keys:
-        table.add_column(k, width=10, justify="center")
+        w = 12 if k == "属性" else 10
+        table.add_column(k, width=w, justify="center")
 
     rows = guesses_with_hints
 
