@@ -117,9 +117,9 @@ def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
             type_key = TYPE_CN_TO_EN_MAP.get(type_name)
             type_style = TYPE_COLORS.get(type_key, color) if type_key else color
             if level == "partial" and type_name in matched_types:
-                _ = t.append(f"✓{type_name}", style=f"bold {type_style}")
-            else:
                 _ = t.append(type_name, style=type_style)
+            else:
+                _ = t.append(type_name, style=f"dim {type_style}")
     else:
         _ = t.append(val, style=color)
     if extra and label != "属性":
