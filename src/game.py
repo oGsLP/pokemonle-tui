@@ -57,8 +57,8 @@ GuessRecord = tuple[PokemonEntry, list[HintRecord]]
 console = Console()
 
 # Hint label → icon mapping (matches web version: success/warning/info)
-HINT_ICON = {"exact": "●", "partial": "◐", "close": "◐", "miss": "○", "far": "○"}
-HINT_COLOR = {"exact": "bold green", "partial": "bold yellow", "close": "bold yellow",
+HINT_ICON = {"exact": "", "partial": "", "close": "", "miss": "", "far": ""}
+HINT_COLOR = {"exact": "underline green", "partial": "bold yellow", "close": "bold yellow",
               "miss": "dim", "far": "dim"}
 ARROW_STYLE = "dim"
 
@@ -105,10 +105,9 @@ def show_logo() -> None:
 
 
 def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
-    """格式化单个提示格子"""
-    icon = HINT_ICON.get(level, "⬛")
     color = _hint_color(level)
-    t = Text(icon, style=color)
+    icon = HINT_ICON.get(level, "")
+    t = Text(icon, style=color) if icon else Text(style=color)
     if label == "属性" and val:
         for idx, type_name in enumerate(val.split("/")):
             if idx > 0:
