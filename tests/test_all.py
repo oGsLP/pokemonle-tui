@@ -233,12 +233,15 @@ class TestConfig:
 
 class TestComparison:
     def test_same_pokemon_all_exact(self, pokemon_25, default_config):
-        """相同宝可梦应该全部 exact"""
+        """相同宝可梦应该全部 exact（属性除外，属性只有 partial/miss）"""
         details = get_pokemon_details(pokemon_25)
         hints = compare_pokemon(details, details, default_config)
         for h in hints:
             level = h[2]
-            assert level == "exact", f"{h[0]} 应该是 exact，实际是 {level}"
+            if h[0] == "属性":
+                assert level == "partial", f"属性应该是 partial，实际是 {level}"
+            else:
+                assert level == "exact", f"{h[0]} 应该是 exact，实际是 {level}"
 
     def test_different_pokemon_has_non_exact(self, pokemon_1, pokemon_4, default_config):
         """不同宝可梦应该有非 exact 的提示"""

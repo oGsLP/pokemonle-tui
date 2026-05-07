@@ -42,9 +42,7 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigData)
     guess_types = cast(list[str], guess["types"])
     t1 = set(target_types)
     t2 = set(guess_types)
-    if t1 == t2:
-        hints.append(Hint("属性", "/".join(target_types), "exact"))
-    elif t1 & t2:
+    if t1 & t2:
         matched = "/".join(sorted(t1 & t2))
         hints.append(Hint("属性", "/".join(guess_types), "partial", matched))
     else:
