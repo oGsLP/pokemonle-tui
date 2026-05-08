@@ -22,6 +22,7 @@ from config import load_config, save_config
 from comparison import compare_pokemon
 from fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
 from stats import save_game_stats, get_stats_summary
+from share import format_share_result
 
 try:
     from prompt_toolkit import PromptSession
@@ -92,7 +93,7 @@ def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
     return t
 
 
-def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, config: ConfigDict) -> None:
+def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, config: ConfigDict, *, pool_size: int = 0) -> None:
     """显示猜测历史表格"""
     # 收集所有可能的 hint key，按顺序
     header_keys = ["编号", "属性", "世代"]
@@ -105,10 +106,15 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
     if config.get("show_egg_group"):
         header_keys += ["蛋组"]
 
+    title = f"📋 猜测记录 (第 {len(guesses_with_hints)}/{max_guesses} 次"
+    if pool_size:
+        title += f" | 池中 {pool_size} 只"
+    title += ")"
+
     table = Table(
         box=box.SIMPLE_HEAVY, border_style="dim", show_header=True,
         header_style="bold white on grey23",
-        title=f"📋 猜测记录 (第 {len(guesses_with_hints)}/{max_guesses} 次)",
+        title=title,
         title_style="bold yellow",
         padding=(0, 1),
     )
@@ -255,17 +261,29 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     max_guesses = max(3, min(15, int(max_guesses_raw) if isinstance(max_guesses_raw, (int, float)) else 10))
 
     pool = [p for p in pokemon_list if p["generation"] in gen_filter]
+    total_pool_size = len(pool)
     if not pool:
         _console.print("[red]请至少选择一个世代！[/red]")
         return
 
     target = random.choice(pool)
-    target_details = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
-    species_data = cast(dict[str, object] | None, fetch_species_data(target["id"]))
-    if species_data:
-        target_details["egg_groups"] = cast(list[str], species_data.get("egg_groups", []))
-        cr = species_data.get("capture_rate")
-        target_details["capture_rate"] = int(cr) if cr is not None else 0
+    # Defer PokeAPI enrichment to first comparison (avoids blocking game start)
+    target_details: PokemonEntry = cast(PokemonEntry, dict(target))
+    _target_enriched = False
+
+    def _ensure_target_details() -> None:
+        """Enrich target with PokeAPI data on first need."""
+        nonlocal target_details, _target_enriched
+        if _target_enriched:
+            return
+        enriched = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
+        species_data = cast(dict[str, object] | None, fetch_species_data(target["id"]))
+        if species_data:
+            enriched["egg_groups"] = cast(list[str], species_data.get("egg_groups", []))
+            cr = species_data.get("capture_rate")
+            enriched["capture_rate"] = int(cr) if cr is not None else 0
+        target_details = enriched
+        _target_enriched = True
 
     guesses_with_hints: list[GuessRecord] = []
     guessed_names: set[str] = set()
@@ -286,6 +304,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     _console.print(Panel(
         (
             f"[bold cyan]🎮 新游戏开始！[/bold cyan]\n\n"
+            f"  宝可梦池 [bold yellow]{total_pool_size}[/bold yellow] 只\n"
             f"  最多猜测 [bold yellow]{max_guesses}[/bold yellow] 次\n"
             f"  输入宝可梦中文名/英文名/编号（支持模糊补全）\n"
             "  输入 [bold red]q[/bold red] 退出  |  [bold red]reveal[/bold red] 揭晓答案\n"
@@ -356,6 +375,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         guess_species = cast(dict[str, object] | None, fetch_species_data(guess["id"]))
         if guess_species:
             guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
+        _ensure_target_details()
         hints = list(compare_pokemon(target_details, guess_details, config))
 
         # 小恶作剧模式
@@ -369,7 +389,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
         guesses_with_hints.append((guess, hints))
         _console.print()
-        show_hints_table(guesses_with_hints, max_guesses, config)
+        show_hints_table(guesses_with_hints, max_guesses, config, pool_size=total_pool_size)
 
         if guess["id"] == target["id"]:
             elapsed = time.time() - start_time
@@ -382,6 +402,13 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 ),
                 border_style="dim", title="🏆 You Win!",
             ))
+            gen_short = GEN_MAP.get(target.get("generation", ""), ("",))[0]
+            share_text = format_share_result(
+                guesses_with_hints, max_guesses,
+                target["name"], target["name_en"], target["id"], True,
+                gen_short,
+            )
+            _console.print(Panel(share_text, border_style="dim", title="📤 分享结果"))
             _safe_save_stats(True, len(guesses_with_hints))
             return
 
@@ -393,6 +420,13 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 ),
                 border_style="dim", title="💀 Game Over",
             ))
+            gen_short = GEN_MAP.get(target.get("generation", ""), ("",))[0]
+            share_text = format_share_result(
+                guesses_with_hints, max_guesses,
+                target["name"], target["name_en"], target["id"], False,
+                gen_short,
+            )
+            _console.print(Panel(share_text, border_style="dim", title="📤 分享结果"))
             _safe_save_stats(False, len(guesses_with_hints))
             return
 
