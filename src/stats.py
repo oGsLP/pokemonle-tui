@@ -3,6 +3,7 @@
 """
 import json
 import os
+import sys
 from typing import Dict
 
 import constants
@@ -20,8 +21,10 @@ def _load_stats() -> Dict:
         try:
             with open(path, "r") as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except json.JSONDecodeError:
+            print(f"警告: 统计文件损坏，使用默认统计: {path}", file=sys.stderr)
+        except OSError as exc:
+            print(f"警告: 无法读取统计文件，使用默认统计: {exc}", file=sys.stderr)
     return {"wins": 0, "total": 0, "guesses_history": []}
 
 
@@ -32,8 +35,12 @@ def save_game_stats(won: bool, num_guesses: int) -> None:
     if won:
         stats["wins"] += 1
     stats["guesses_history"].append(num_guesses)
-    with open(_stats_file(), "w") as f:
-        json.dump(stats, f, ensure_ascii=False)
+    # 静默失败可接受：统计丢失不影响游戏体验
+    try:
+        with open(_stats_file(), "w") as f:
+            json.dump(stats, f, ensure_ascii=False)
+    except OSError:
+        pass
 
 
 def get_stats_summary(pokemon_count: int) -> str:

@@ -3,6 +3,7 @@
 """
 import json
 import os
+import sys
 from typing import cast
 
 import constants
@@ -30,12 +31,17 @@ def load_config() -> dict[str, object]:
                 if k not in loaded_cfg:
                     loaded_cfg[k] = v
             return loaded_cfg
-        except Exception:
-            pass
+        except json.JSONDecodeError:
+            print(f"警告: 配置文件损坏，使用默认配置: {path}", file=sys.stderr)
+        except OSError as exc:
+            print(f"警告: 无法读取配置文件，使用默认配置: {exc}", file=sys.stderr)
     return dict(constants.DEFAULT_CONFIG)
 
 
 def save_config(cfg: dict[str, object]) -> None:
     """保存游戏配置到文件"""
-    with open(_config_file(), "w") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    try:
+        with open(_config_file(), "w") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        print(f"警告: 无法保存配置文件: {exc}", file=sys.stderr)

@@ -7,7 +7,7 @@ import ssl
 import sys
 import urllib.error
 import urllib.request
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from constants import DATA_FILE, CACHE_DIR
 
@@ -30,50 +30,38 @@ def load_pokemon_data() -> List[Dict]:
 
     pokemon: List[Dict] = []
     for entry in raw:
-        pokemon.append({
-            "index": entry["index"],
-            "id": int(entry["index"]),
-            "name": entry["name"],
-            "name_en": entry.get("name_en", ""),
-            "name_jp": entry.get("name_jp", ""),
-            "types": entry.get("types", []),
-            "generation": entry.get("generation", ""),
-        })
+        try:
+            pokemon.append({
+                "index": entry["index"],
+                "id": int(entry["index"]),
+                "name": entry["name"],
+                "name_en": entry.get("name_en", ""),
+                "name_jp": entry.get("name_jp", ""),
+                "types": entry.get("types", []),
+                "generation": entry.get("generation", ""),
+            })
+        except (KeyError, ValueError) as exc:
+            print(f"警告: 跳过损坏的宝可梦数据条目: {exc}", file=sys.stderr)
+            continue
     return pokemon
 
 
-def build_pokemon_index(pokemon_list: List[Dict]) -> Tuple[Dict, Dict[int, List[Dict]]]:
-    """构建宝可梦快速索引，支持 id / 中文名 / 英文名 / 日文名 查找
-    
-    返回 (name_index, id_map) 二元组：
-    - name_index: 名称索引，支持中文名/英文名/日文名精确查找
-    - id_map: ID 索引，id -> [pokemon1, pokemon2, ...]（支持地区形态共享ID）
-    
-    注意：地区形态可能与原版共享相同编号，因此 id 索引使用列表存储。
-    名称索引仍然是一对一映射。
-    """
-    name_index: Dict = {}
-    id_map: Dict[int, List[Dict]] = {}  # id -> [pokemon1, pokemon2, ...]
-    
+def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
+    """构建宝可梦快速索引，支持 id / 中文名 / 英文名 / 日文名 查找"""
+    index: Dict = {}
     for pokemon in pokemon_list:
-        # 名称索引（精确匹配，一对一）
-        name_index[pokemon["name"]] = pokemon
+        index[pokemon["id"]] = pokemon
+        index[pokemon["name"]] = pokemon
 
         normalized_en = pokemon["name_en"].lower().replace("-", "").replace(" ", "")
         if normalized_en:
-            name_index[normalized_en] = pokemon
+            index[normalized_en] = pokemon
 
         normalized_jp = pokemon.get("name_jp", "").lower()
         if normalized_jp:
-            name_index[normalized_jp] = pokemon
-        
-        # ID 索引（一对多，支持地区形态）
-        poke_id = pokemon["id"]
-        if poke_id not in id_map:
-            id_map[poke_id] = []
-        id_map[poke_id].append(pokemon)
-    
-    return name_index, id_map
+            index[normalized_jp] = pokemon
+
+    return index
 
 
 def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
@@ -81,8 +69,12 @@ def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
     os.makedirs(CACHE_DIR, exist_ok=True)
     cache_file = os.path.join(CACHE_DIR, f"{poke_id:04d}.json")
     if os.path.exists(cache_file):
-        with open(cache_file, "r") as f:
-            return json.load(f)
+        try:
+            with open(cache_file, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"警告: 缓存文件损坏，跳过: {cache_file}", file=sys.stderr)
+            return None
     try:
         url = f"https://pokeapi.co/api/v2/pokemon/{poke_id}"
         req = urllib.request.Request(url, headers={"User-Agent": "PokemonleCLI/1.0"})
@@ -95,8 +87,11 @@ def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
             "stats": {s["stat"]["name"]: s["base_stat"] for s in data["stats"]},
             "abilities": [a["ability"]["name"] for a in data["abilities"]],
         }
-        with open(cache_file, "w") as f:
-            json.dump(result, f)
+        try:
+            with open(cache_file, "w") as f:
+                json.dump(result, f)
+        except OSError as exc:
+            print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
         return result
     except urllib.error.URLError as exc:
         print(f"警告: 获取宝可梦 {poke_id} 的 PokeAPI 数据失败: {exc}", file=sys.stderr)
@@ -111,8 +106,12 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
     os.makedirs(CACHE_DIR, exist_ok=True)
     cache_file = os.path.join(CACHE_DIR, f"{poke_id:04d}_species.json")
     if os.path.exists(cache_file):
-        with open(cache_file, "r") as f:
-            return json.load(f)
+        try:
+            with open(cache_file, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"警告: 缓存文件损坏，跳过: {cache_file}", file=sys.stderr)
+            return None
 
     try:
         url = f"https://pokeapi.co/api/v2/pokemon-species/{poke_id}"
@@ -133,8 +132,11 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
             "habitat": data.get("habitat", {}).get("name") if data.get("habitat") else None,
         }
 
-        with open(cache_file, "w") as f:
-            json.dump(result, f)
+        try:
+            with open(cache_file, "w") as f:
+                json.dump(result, f)
+        except OSError as exc:
+            print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
         return result
     except urllib.error.URLError as exc:
         print(f"警告: 获取宝可梦 {poke_id} 的 species 数据失败: {exc}", file=sys.stderr)
@@ -142,8 +144,6 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
     except Exception as exc:
         print(f"警告: 处理宝可梦 {poke_id} 的 species 数据失败: {exc}", file=sys.stderr)
         return None
-
-
 def get_pokemon_details(poke: Dict) -> Dict:
     """获取宝可梦详细信息（基础数据 + PokeAPI 补充种族值/身高/体重）"""
     details: Dict = {**poke}

@@ -1,20 +1,17 @@
 """
-比较逻辑 — 目标宝可梦和猜测宝可梦之间的对比，生成提示列表
-"""
+ 比较逻辑 — 目标宝可梦和猜测宝可梦之间的对比，生成提示列表
+ """
 
 from typing import cast
 
 import constants
 from constants import GEN_MAP, Hint
+from poketypes import ConfigDict, PokemonData
 
-PokemonData = dict[str, object]
-ConfigData = dict[str, object]
-ModePreset = dict[str, int]
-GameModePresets = dict[str, ModePreset]
-GAME_MODE_PRESETS: GameModePresets = cast(GameModePresets, constants.GAME_MODE_PRESETS)
+GAME_MODE_PRESETS: dict[str, dict] = cast(dict[str, dict], constants.GAME_MODE_PRESETS)
 
 
-def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigData) -> list[Hint]:
+def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict) -> list[Hint]:
     """
     比较目标宝可梦和猜测宝可梦，返回提示列表。
     每个提示格式: (标签, 值, 等级, [箭头])

@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 import random
 import time
-from typing import TypedDict, cast
+from typing import cast
 
 from rich.console import Console
 from rich.table import Table
@@ -15,7 +15,8 @@ from rich.text import Text
 from rich import box
 from rich.align import Align
 
-from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_COLORS
+from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_COLORS, TYPE_CN_TO_EN_MAP
+from poketypes import ConfigDict, GuessRecord, HintRecord, PokemonEntry
 from data import get_pokemon_details, fetch_species_data
 from config import load_config, save_config
 from comparison import compare_pokemon
@@ -30,30 +31,6 @@ except ImportError:
     CompleteStyle = None
 
 
-class PokemonEntry(TypedDict, total=False):
-    id: int
-    name: str
-    name_en: str
-    name_jp: str
-    types: list[str]
-    generation: str
-    egg_groups: list[str]
-    capture_rate: int
-    stat_total: int
-    speed: int
-    hp: int
-    attack: int
-    defense: int
-    sp_attack: int
-    sp_defense: int
-    height: int
-    weight: int
-
-
-ConfigDict = dict[str, object]
-HintRecord = Hint | tuple[str, str, str] | tuple[str, str, str, str | None]
-GuessRecord = tuple[PokemonEntry, list[HintRecord]]
-
 console = Console()
 
 # Hint label → icon mapping (matches web version: success/warning/info)
@@ -62,27 +39,6 @@ HINT_COLOR = {"exact": "bold green", "partial": "bold yellow", "close": "bold ye
               "miss": "dim", "far": "dim"}
 ARROW_UP = "bold green"
 ARROW_DOWN = "bold red"
-
-TYPE_CN_TO_EN_MAP = {
-    "一般": "normal",
-    "火": "fire",
-    "水": "water",
-    "草": "grass",
-    "电": "electric",
-    "冰": "ice",
-    "格斗": "fighting",
-    "毒": "poison",
-    "地面": "ground",
-    "飞行": "flying",
-    "超能力": "psychic",
-    "虫": "bug",
-    "岩石": "rock",
-    "幽灵": "ghost",
-    "龙": "dragon",
-    "恶": "dark",
-    "钢": "steel",
-    "妖精": "fairy",
-}
 
 
 def _hint_color(level: str) -> str:
@@ -115,12 +71,11 @@ def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
             if idx > 0:
                 _ = t.append("/", style=color)
             type_key = TYPE_CN_TO_EN_MAP.get(type_name)
-            type_color = TYPE_COLORS.get(type_key, color) if type_key else color
+            type_style = TYPE_COLORS.get(type_key, color) if type_key else color
             if level == "partial" and type_name in matched_types:
-                # 部分匹配：白色字体 + 背景色块
-                _ = t.append(type_name, style=f"white on {type_color}")
+                _ = t.append(type_name, style=type_style)
             else:
-                _ = t.append(type_name, style=f"dim {type_color}")
+                _ = t.append(type_name, style=f"dim {type_style}")
     else:
         _ = t.append(val, style=color)
     if extra and label != "属性":
