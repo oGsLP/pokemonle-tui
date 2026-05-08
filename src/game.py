@@ -265,7 +265,7 @@ def _show_answer(target: PokemonEntry, preamble: str, style: str) -> None:
         preamble: 前置文本（已含 Rich markup）
         style: Panel 样式 (border_style, title)
     """
-    console.print(Panel(
+    _console.print(Panel(
         (
             f"{preamble}\n\n"
             f"  答案: [bold]{target['name']}[/bold] ({target['name_en']}) #{target['id']:04d}"
