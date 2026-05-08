@@ -28,6 +28,9 @@ TYPE_COLORS: Dict[str, str] = {
     "dark": "#705848", "steel": "#B8B8D0", "fairy": "#EE99AC",
 }
 
+# ── 形态关键词列表（用于识别地区形态） ──
+FORM_INDICATORS: List[str] = ["-", "的样子", "alola", "galar", "paldea", "hisui"]
+
 # ── 世代名称 → (缩写, 序号) ──
 GEN_MAP: Dict[str, Tuple[str, int]] = {
     "第一世代": ("1代", 1), "第二世代": ("2代", 2), "第三世代": ("3代", 3),

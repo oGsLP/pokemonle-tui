@@ -169,10 +169,13 @@ class TestData:
         assert result is None
 
     def test_build_pokemon_index_lookups(self, pokemon_list):
-        idx = build_pokemon_index(pokemon_list)
-        assert idx[25]["name"] == "皮卡丘"
-        assert idx["皮卡丘"]["id"] == 25
-        assert idx["pikachu"]["id"] == 25
+        name_idx, id_map = build_pokemon_index(pokemon_list)
+        # 名称索引 - 通过名称查找
+        assert name_idx["皮卡丘"]["id"] == 25
+        assert name_idx["pikachu"]["id"] == 25
+        # ID 索引 - 通过 ID 查找
+        assert 25 in id_map
+        assert id_map[25][0]["name"] == "皮卡丘"
 
     def test_fetch_species_data_cached(self):
         species_cache_ids = []
@@ -398,9 +401,13 @@ class TestComparison:
 
 class TestFuzzy:
     def test_build_pokemon_index(self, pokemon_list):
-        idx = build_pokemon_index(pokemon_list)
-        assert isinstance(idx, dict)
-        assert idx[25]["name"] == "皮卡丘"
+        name_idx, id_map = build_pokemon_index(pokemon_list)
+        assert isinstance(name_idx, dict)
+        assert isinstance(id_map, dict)
+        # 名称索引 - 通过名称查找
+        assert name_idx["皮卡丘"]["id"] == 25
+        # ID 索引 - 通过 ID 查找
+        assert 25 in id_map
 
     def test_exact_chinese_name(self, pokemon_25):
         assert score_pokemon("皮卡丘", pokemon_25) == 100
@@ -460,6 +467,35 @@ class TestFuzzy:
     def test_find_pokemon_not_found(self, pokemon_list):
         result = find_pokemon("zzzzz_not_pokemon", pokemon_list)
         assert result is None
+
+    def test_find_pokemon_regional_form_by_id_only(self, pokemon_list):
+        """仅输入 ID 26（共享 ID）应返回原版形态"""
+        result = find_pokemon("26", pokemon_list)
+        assert result is not None
+        # 只有一个候选时直接返回
+        if "-" in result["name"]:
+            # 如果有多个候选但用户没有指定形态，应返回原版（第一个）
+            assert result["name"] == "雷丘"
+        else:
+            assert result["name"] == "雷丘"
+
+    def test_find_pokemon_regional_form_with_indicator(self, pokemon_list):
+        """输入 26-阿罗拉的样子 → 返回地区形态"""
+        result = find_pokemon("26-阿罗拉的样子", pokemon_list)
+        assert result is not None
+        assert result["name"] == "雷丘-阿罗拉的样子"
+
+    def test_find_pokemon_multiple_forms_default(self, pokemon_list):
+        """输入 52（3 个形态的喵喵）→ 返回普通喵喵（原版）"""
+        result = find_pokemon("52", pokemon_list)
+        assert result is not None
+        assert result["name"] == "喵喵"
+
+    def test_find_pokemon_regional_form_galar(self, pokemon_list):
+        """输入 52-伽勒尔的样子 → 返回伽勒尔形态喵喵"""
+        result = find_pokemon("52-伽勒尔的样子", pokemon_list)
+        assert result is not None
+        assert result["name"] == "喵喵-伽勒尔的样子"
 
 
 # ══════════════════════════════════════════════
