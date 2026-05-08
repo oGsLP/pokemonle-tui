@@ -63,7 +63,7 @@ def show_logo() -> None:
   ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
   ── 宝可梦猜猜猜 CLI v2 ──
 """
-    console.print(Panel(
+    _console.print(Panel(
         Align.center(Text(logo, style="bold cyan")),
         border_style="dim", box=box.ROUNDED, padding=(0, 1),
     ))
@@ -139,12 +139,12 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
                 row.append(Text("—", style="dim"))
         table.add_row(*row)
 
-    console.print(table)
+    _console.print(table)
 
 
 def show_game_stats(pokemon_count: int) -> None:
     """显示游戏统计面板"""
-    console.print(Panel(get_stats_summary(pokemon_count).strip(), border_style="dim", title="📊 Stats"))
+    _console.print(Panel(get_stats_summary(pokemon_count).strip(), border_style="dim", title="📊 Stats"))
 
 
 # ══════════════════════════════════════════════
@@ -159,9 +159,9 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         cfg["generations"] = list(ALL_GENERATIONS)
 
     while True:
-        console.print(f"\n{'═' * 40}")
-        console.print("  ⚙️  设置")
-        console.print("═" * 40)
+        _console.print(f"\n{'═' * 40}")
+        _console.print("  ⚙️  设置")
+        _console.print("═" * 40)
 
         # 游戏模式
         mode_display = {
@@ -169,11 +169,11 @@ def show_settings(config: ConfigDict) -> ConfigDict:
             "hard": "困难模式 · 更严格的提示范围和更少猜测次数",
             "easy": "简单模式 · 更宽松的提示范围和更多猜测次数",
         }.get(cfg.get("game_mode", "normal"), cfg.get("game_mode", "normal"))
-        console.print(f"\n  游戏模式: [yellow]{mode_display}[/yellow]")
-        console.print("  [dim]  1=普通  2=困难  3=简单[/dim]")
+        _console.print(f"\n  游戏模式: [yellow]{mode_display}[/yellow]")
+        _console.print("  [dim]  1=普通  2=困难  3=简单[/dim]")
 
         # 世代选择
-        console.print(f"\n  世代选择 (当前 {len(cfg.get('generations', []))} 代):")
+        _console.print(f"\n  世代选择 (当前 {len(cfg.get('generations', []))} 代):")
         gen_labels = [
             "1代(红黄蓝绿)", "2代(金银)", "3代(红蓝绿宝石)", "4代(珍珠钻石白金)",
             "5代(黑白)", "6代(XY)", "7代(日月)", "8代(剑盾)", "9代(朱紫)",
@@ -181,14 +181,14 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         active_gens = set(cfg.get("generations", ALL_GENERATIONS))
         for i, (g, label) in enumerate(zip(ALL_GENERATIONS, gen_labels), 1):
             mark = "[green]✓[/green]" if g in active_gens else "[red]✗[/red]"
-            console.print(f"    {mark} {i}. {label}")
+            _console.print(f"    {mark} {i}. {label}")
 
         # 猜测次数
         mg = cfg.get("max_guesses", 10)
-        console.print(f"\n  猜测次数: [yellow]{mg}[/yellow] (3-15)")
+        _console.print(f"\n  猜测次数: [yellow]{mg}[/yellow] (3-15)")
 
         # 显示选项
-        console.print("\n  显示选项:")
+        _console.print("\n  显示选项:")
         opts = [
             ("show_more_stats", "显示更多种族值 (HP/攻击/防御/特攻/特防)"),
             ("show_more_appearance", "显示更多外形信息 (体型比较)"),
@@ -199,12 +199,12 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         ]
         for i, (key, label) in enumerate(opts, 1):
             mark = "[green]✓[/green]" if cfg.get(key) else "[red]✗[/red]"
-            console.print(f"    {mark} {i}. {label}  [dim](t{i} 切换)[/dim]")
+            _console.print(f"    {mark} {i}. {label}  [dim](t{i} 切换)[/dim]")
 
-        console.print(f"\n  [cyan]a[/cyan]=全选世代  [cyan]n[/cyan]=取消全选  [cyan]s[/cyan]=保存  [cyan]q[/cyan]=取消")
+        _console.print(f"\n  [cyan]a[/cyan]=全选世代  [cyan]n[/cyan]=取消全选  [cyan]s[/cyan]=保存  [cyan]q[/cyan]=取消")
 
         try:
-            choice = console.input("\n  > ").strip().lower()
+            choice = _console.input("\n  > ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             return config
 
@@ -213,9 +213,9 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         elif choice == "s":
             try:
                 save_config(cfg)
-                console.print("[green]✅ 设置已保存[/green]")
+                _console.print("[green]✅ 设置已保存[/green]")
             except OSError:
-                console.print("[red]❌ 保存失败！[/red]")
+                _console.print("[red]❌ 保存失败！[/red]")
             return cfg
         elif choice == "a":
             cfg["generations"] = list(ALL_GENERATIONS)
@@ -247,7 +247,7 @@ def show_settings(config: ConfigDict) -> ConfigDict:
 def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     """运行一局游戏"""
     if PromptSession is None or CompleteStyle is None:
-        console.print("[red]缺少 prompt_toolkit，无法启动交互补全。[/red]")
+        _console.print("[red]缺少 prompt_toolkit，无法启动交互补全。[/red]")
         return
 
     gen_filter = set(config.get("generations", []))
@@ -256,7 +256,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
     pool = [p for p in pokemon_list if p["generation"] in gen_filter]
     if not pool:
-        console.print("[red]请至少选择一个世代！[/red]")
+        _console.print("[red]请至少选择一个世代！[/red]")
         return
 
     target = random.choice(pool)
@@ -283,7 +283,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         enable_history_search=False,
     )
 
-    console.print(Panel(
+    _console.print(Panel(
         (
             f"[bold cyan]🎮 新游戏开始！[/bold cyan]\n\n"
             f"  最多猜测 [bold yellow]{max_guesses}[/bold yellow] 次\n"
@@ -300,7 +300,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         try:
             guess_input = session.prompt()
         except (KeyboardInterrupt, EOFError):
-            console.print(
+            _console.print(
                 f"\n[dim]退出。答案是 [bold]{target['name']}[/bold] "
                 f"({target['name_en']}, #{target['id']:04d})[/dim]"
             )
@@ -312,7 +312,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             continue
 
         if guess_input.lower() in ("q", "quit"):
-            console.print(
+            _console.print(
                 f"\n[yellow]退出。答案是 [bold]{target['name']}[/bold] "
                 f"({target['name_en']}, #{target['id']:04d})[/yellow]"
             )
@@ -320,7 +320,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             return
 
         if guess_input.lower() == "reveal":
-            console.print(
+            _console.print(
                 f"\n[yellow]答案是 [bold]{target['name']}[/bold] "
                 f"({target['name_en']}, #{target['id']:04d})[/yellow]"
             )
@@ -332,9 +332,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             suggestions = cast(list[PokemonEntry], get_fuzzy_matches(guess_input, pokemon_list, limit=5))
             if suggestions:
                 sug = "  ".join(f"[cyan]{s['name']}[/cyan]({s['name_en']})" for s in suggestions)
-                console.print(f"[yellow]找不到「{guess_input}」，你是不是: {sug}[/yellow]")
+                _console.print(f"[yellow]找不到「{guess_input}」，你是不是: {sug}[/yellow]")
             else:
-                console.print(f"[yellow]找不到「{guess_input}」[/yellow]")
+                _console.print(f"[yellow]找不到「{guess_input}」[/yellow]")
             continue
 
         # 歧义检测: 非精确匹配时检查是否有其他高分候选项
@@ -345,10 +345,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             others = [m for m in alt_matches if m["id"] != guess["id"]]
             if others:
                 alt_names = "  ".join(f"[cyan]{m['name']}[/cyan]({m['name_en']})" for m in others[:2])
-                console.print(f"[yellow]⚠ 你是不是指: {alt_names}？已按最佳匹配选择 {guess['name']}。[/yellow]")
+                _console.print(f"[yellow]⚠ 你是不是指: {alt_names}？已按最佳匹配选择 {guess['name']}。[/yellow]")
 
         if guess["name"] in guessed_names:
-            console.print(f"[yellow]已经猜过 {guess['name']} 了！[/yellow]")
+            _console.print(f"[yellow]已经猜过 {guess['name']} 了！[/yellow]")
             continue
 
         guessed_names.add(guess["name"])
@@ -368,12 +368,12 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 hints[idx] = Hint(label, val, level, "↑" if arrow == "↓" else "↓")
 
         guesses_with_hints.append((guess, hints))
-        console.print()
+        _console.print()
         show_hints_table(guesses_with_hints, max_guesses, config)
 
         if guess["id"] == target["id"]:
             elapsed = time.time() - start_time
-            console.print(Panel(
+            _console.print(Panel(
                 (
                     f"[bold green]🎉 猜对了！[/bold green]\n\n"
                     f"  答案: [bold]{target['name']}[/bold] ({target['name_en']}) #{target['id']:04d}\n"
@@ -386,7 +386,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             return
 
         if len(guesses_with_hints) >= max_guesses:
-            console.print(Panel(
+            _console.print(Panel(
                 (
                     f"[bold red]😢 游戏结束！[/bold red]\n\n"
                     f"  答案是: [bold]{target['name']}[/bold] ({target['name_en']}) #{target['id']:04d}"
@@ -406,13 +406,13 @@ def main() -> None:
     from data import load_pokemon_data
 
     show_logo()
-    console.print("[dim]正在加载宝可梦数据...[/dim]")
+    _console.print("[dim]正在加载宝可梦数据...[/dim]")
     try:
         pokemon_list = load_pokemon_data()
     except (FileNotFoundError, ValueError) as exc:
-        console.print(f"[red]错误: {exc}[/red]")
+        _console.print(f"[red]错误: {exc}[/red]")
         return
-    console.print(f"[green]✅ 已加载 {len(pokemon_list)} 只宝可梦[/green]")
+    _console.print(f"[green]✅ 已加载 {len(pokemon_list)} 只宝可梦[/green]")
     pokemon_list = cast(list[PokemonEntry], pokemon_list)
 
     gen_counts: dict[str, int] = {}
@@ -424,29 +424,29 @@ def main() -> None:
         for g, c in sorted(gen_counts.items(),
                            key=lambda x: GEN_MAP.get(x[0], (x[0], 0))[1])
     )
-    console.print(f"[dim]{gen_info}[/dim]")
+    _console.print(f"[dim]{gen_info}[/dim]")
 
     from constants import CACHE_DIR
     cached = 0
     if os.path.isdir(CACHE_DIR):
         cached = len([f for f in os.listdir(CACHE_DIR) if f.endswith(".json")])
-    console.print(f"[dim]PokeAPI 缓存: {cached} 个（首次猜测时自动拉取）[/dim]\n")
+    _console.print(f"[dim]PokeAPI 缓存: {cached} 个（首次猜测时自动拉取）[/dim]\n")
 
     config = load_config()
     if not config.get("generations"):
         config["generations"] = list(ALL_GENERATIONS)
 
     while True:
-        console.print("\n[bold cyan]═══ 主菜单 ═══[/bold cyan]")
-        console.print("  [bold]1[/bold]. 🎮 开始游戏")
-        console.print("  [bold]2[/bold]. 📊 查看统计")
-        console.print("  [bold]3[/bold]. ⚙️  设置")
-        console.print("  [bold]q[/bold]. 退出\n")
+        _console.print("\n[bold cyan]═══ 主菜单 ═══[/bold cyan]")
+        _console.print("  [bold]1[/bold]. 🎮 开始游戏")
+        _console.print("  [bold]2[/bold]. 📊 查看统计")
+        _console.print("  [bold]3[/bold]. ⚙️  设置")
+        _console.print("  [bold]q[/bold]. 退出\n")
 
         try:
-            choice = console.input("[cyan]选择 > [/cyan]").strip()
+            choice = _console.input("[cyan]选择 > [/cyan]").strip()
         except (EOFError, KeyboardInterrupt):
-            console.print("\n[dim]再见！[/dim]")
+            _console.print("\n[dim]再见！[/dim]")
             break
 
         if choice == "1":
@@ -458,5 +458,5 @@ def main() -> None:
         elif choice == "3":
             config = show_settings(config)
         elif choice.lower() in ("q", "quit", "exit"):
-            console.print("\n[dim]再见！捕捉更多宝可梦！[/dim] 🎉")
+            _console.print("\n[dim]再见！捕捉更多宝可梦！[/dim] 🎉")
             break

@@ -754,7 +754,7 @@ def _mock_game_env(monkeypatch, pokemon_list, target, inputs, tmp_path):
     monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(inputs))
     monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
     monkeypatch.setattr("random.choice", lambda s: target)
-    monkeypatch.setattr("game.console.print", lambda *a, **kw: None)
+    monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
     monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
 
     def _fake_details(poke):
@@ -804,7 +804,7 @@ class TestRunGame:
         monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(bad_guesses))
         monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
         monkeypatch.setattr("random.choice", lambda s: target)
-        monkeypatch.setattr("game.console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
         monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
         monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
         monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
@@ -838,7 +838,7 @@ class TestRunGame:
         real_choice = random.choice
         monkeypatch.setattr("random.choice", lambda s: target if isinstance(s[0], dict) else real_choice(s))
 
-        monkeypatch.setattr("game.console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
         monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
         monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
         monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
