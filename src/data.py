@@ -43,10 +43,16 @@ def load_pokemon_data() -> List[Dict]:
 
 
 def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
-    """构建宝可梦快速索引，支持 id / 中文名 / 英文名 / 日文名 查找"""
+    """构建宝可梦快速索引，支持 id / 中文名 / 英文名 / 日文名 查找
+    
+    注意：地区形态可能与原版共享相同编号，因此 id 索引使用列表存储。
+    名称索引仍然是一对一映射。
+    """
     index: Dict = {}
+    id_map: Dict[int, List[Dict]] = {}  # id -> [pokemon1, pokemon2, ...]
+    
     for pokemon in pokemon_list:
-        index[pokemon["id"]] = pokemon
+        # 名称索引（精确匹配，一对一）
         index[pokemon["name"]] = pokemon
 
         normalized_en = pokemon["name_en"].lower().replace("-", "").replace(" ", "")
@@ -56,6 +62,15 @@ def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
         normalized_jp = pokemon.get("name_jp", "").lower()
         if normalized_jp:
             index[normalized_jp] = pokemon
+        
+        # ID 索引（一对多，支持地区形态）
+        poke_id = pokemon["id"]
+        if poke_id not in id_map:
+            id_map[poke_id] = []
+        id_map[poke_id].append(pokemon)
+    
+    # 将 id_map 存入 index，使用特殊前缀避免冲突
+    index["__id_map__"] = id_map
 
     return index
 

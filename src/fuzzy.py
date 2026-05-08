@@ -66,7 +66,7 @@ def score_pokemon(query: str, p: PokemonEntry) -> int:
     # 编号前缀
     if poke_id.startswith(q.lstrip("#")) and len(q) >= 2:
         return 90
-    # 中文名精确
+    # 中文名精确（优先完整匹配，包括地区形态）
     if name_cn == q:
         return 100
     # 英文名精确
@@ -75,8 +75,11 @@ def score_pokemon(query: str, p: PokemonEntry) -> int:
     # 日文名精确
     if name_jp and name_jp == q:
         return 100
-    # 中文名前缀
+    # 中文名前缀（完整匹配地区形态标识）
     if name_cn.startswith(q) and len(q) >= 1:
+        # 如果用户输入包含地区标识，给予更高分数
+        if any(kw in q for kw in ["-", "的样子", "alola", "galar", "paldea", "hisui"]):
+            return 95
         return 85
     # 英文名前缀
     if name_en.startswith(q):
@@ -123,21 +126,43 @@ def get_fuzzy_matches(query: str, pokemon_list: list[PokemonEntry], limit: int =
 
 
 def find_pokemon(query: str, pokemon_list: list[PokemonEntry]) -> PokemonEntry | None:
-    """精确查找宝可梦（中英文名、编号），找不到则取最佳模糊匹配"""
+    """精确查找宝可梦（中英文名、编号），找不到则取最佳模糊匹配
+    
+    对于地区形态（共享相同编号），会通过名称进一步区分：
+    - 如果输入包含 "-" 或 "的样子"，优先匹配地区形态
+    - 否则匹配原版形态
+    """
     q = query.strip().lower()
     idx = _get_index(pokemon_list)
+    id_map = idx.get("__id_map__", {})
 
-    # O(1) exact lookups
+    # O(1) exact lookups by ID
     try:
         num = int(q.lstrip("#"))
-        if num in idx:
-            return idx[num]
+        if num in id_map:
+            candidates = id_map[num]
+            if len(candidates) == 1:
+                return candidates[0]
+            # 多个候选（地区形态），通过名称区分
+            # 判断用户是否输入了地区形态标识
+            query_raw = query.strip()
+            has_form_indicator = any(kw in query_raw for kw in ["-", "的样子", "alola", "galar", "paldea", "hisui"])
+            
+            if has_form_indicator:
+                # 优先返回地区形态（名称包含 "-" 的）
+                for p in candidates:
+                    if "-" in p["name"]:
+                        return p
+            # 否则返回第一个（通常是原版）
+            return candidates[0]
     except ValueError:
         pass
 
+    # Exact lookup by Chinese name
     if query.strip() in idx:
         return idx[query.strip()]
 
+    # Exact lookup by English name (normalized)
     en_key = q.replace("-", "").replace(" ", "")
     if en_key in idx:
         return idx[en_key]
