@@ -7,7 +7,7 @@ import ssl
 import sys
 import urllib.error
 import urllib.request
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from constants import DATA_FILE, CACHE_DIR
 
@@ -66,10 +66,11 @@ def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
     return index
 
 
-def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
-    """从 PokeAPI 获取详细数据，带本地文件缓存"""
+def _cached_or_fetch(
+    cache_file: str, url: str, extract: Callable[[dict], dict], label: str
+) -> Optional[Dict]:
+    """通用缓存+拉取逻辑：读缓存 → 网络拉取 → 原子写缓存"""
     os.makedirs(CACHE_DIR, exist_ok=True)
-    cache_file = os.path.join(CACHE_DIR, f"{poke_id:04d}.json")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, "r") as f:
@@ -77,60 +78,58 @@ def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
         except json.JSONDecodeError:
             print(f"警告: 缓存文件损坏，跳过: {cache_file}", file=sys.stderr)
             return None
+
+    print(f"  ⏳ 正在从 PokeAPI 获取 {label}...", file=sys.stderr)
     try:
-        url = f"https://pokeapi.co/api/v2/pokemon/{poke_id}"
         req = urllib.request.Request(url, headers={"User-Agent": "PokemonleCLI/1.0"})
         ssl_context = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=8, context=ssl_context) as resp:
             if resp.status != 200:
-                print(f"警告: PokeAPI 返回状态码 {resp.status} (宝可梦 {poke_id})", file=sys.stderr)
+                print(f"  ⚠ PokeAPI 返回状态码 {resp.status} ({label})", file=sys.stderr)
                 return None
             data = json.loads(resp.read().decode())
-        result = {
+    except urllib.error.URLError as exc:
+        print(f"  ⚠ 获取 {label} 失败: {exc}", file=sys.stderr)
+        return None
+    except Exception as exc:
+        print(f"  ⚠ 处理 {label} 失败: {exc}", file=sys.stderr)
+        return None
+
+    result = extract(data)
+    tmp_file = cache_file + ".tmp"
+    try:
+        with open(tmp_file, "w") as f:
+            json.dump(result, f)
+        os.replace(tmp_file, cache_file)
+    except OSError as exc:
+        print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
+    print(f"  ✅ {label} 已缓存", file=sys.stderr)
+    return result
+
+
+def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
+    """从 PokeAPI 获取详细数据，带本地文件缓存"""
+    cache_file = os.path.join(CACHE_DIR, f"{poke_id:04d}.json")
+    url = f"https://pokeapi.co/api/v2/pokemon/{poke_id}"
+
+    def _extract(data: dict) -> dict:
+        return {
             "height": data["height"],
             "weight": data["weight"],
             "stats": {s["stat"]["name"]: s["base_stat"] for s in data["stats"]},
             "abilities": [a["ability"]["name"] for a in data["abilities"]],
         }
-        tmp_file = cache_file + ".tmp"
-        try:
-            with open(tmp_file, "w") as f:
-                json.dump(result, f)
-            os.replace(tmp_file, cache_file)
-        except OSError as exc:
-            print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
-        return result
-    except urllib.error.URLError as exc:
-        print(f"警告: 获取宝可梦 {poke_id} 的 PokeAPI 数据失败: {exc}", file=sys.stderr)
-        return None
-    except Exception as exc:
-        print(f"警告: 处理宝可梦 {poke_id} 的 PokeAPI 数据失败: {exc}", file=sys.stderr)
-        return None
+
+    return _cached_or_fetch(cache_file, url, _extract, f"宝可梦 #{poke_id}")
 
 
 def fetch_species_data(poke_id: int) -> Optional[Dict]:
     """从 PokeAPI 获取 species 数据，带本地文件缓存"""
-    os.makedirs(CACHE_DIR, exist_ok=True)
     cache_file = os.path.join(CACHE_DIR, f"{poke_id:04d}_species.json")
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, "r") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            print(f"警告: 缓存文件损坏，跳过: {cache_file}", file=sys.stderr)
-            return None
+    url = f"https://pokeapi.co/api/v2/pokemon-species/{poke_id}"
 
-    try:
-        url = f"https://pokeapi.co/api/v2/pokemon-species/{poke_id}"
-        req = urllib.request.Request(url, headers={"User-Agent": "PokemonleCLI/1.0"})
-        ssl_context = ssl.create_default_context()
-        with urllib.request.urlopen(req, timeout=8, context=ssl_context) as resp:
-            if resp.status != 200:
-                print(f"警告: PokeAPI 返回状态码 {resp.status} (species {poke_id})", file=sys.stderr)
-                return None
-            data = json.loads(resp.read().decode())
-
-        result = {
+    def _extract(data: dict) -> dict:
+        return {
             "egg_groups": [group["name"] for group in data.get("egg_groups", [])],
             "capture_rate": data.get("capture_rate"),
             "hatch_counter": data.get("hatch_counter"),
@@ -142,20 +141,9 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
             "habitat": data.get("habitat", {}).get("name") if data.get("habitat") else None,
         }
 
-        tmp_file = cache_file + ".tmp"
-        try:
-            with open(tmp_file, "w") as f:
-                json.dump(result, f)
-            os.replace(tmp_file, cache_file)
-        except OSError as exc:
-            print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
-        return result
-    except urllib.error.URLError as exc:
-        print(f"警告: 获取宝可梦 {poke_id} 的 species 数据失败: {exc}", file=sys.stderr)
-        return None
-    except Exception as exc:
-        print(f"警告: 处理宝可梦 {poke_id} 的 species 数据失败: {exc}", file=sys.stderr)
-        return None
+    return _cached_or_fetch(cache_file, url, _extract, f"species #{poke_id}")
+
+
 def get_pokemon_details(poke: Dict) -> Dict:
     """获取宝可梦详细信息（基础数据 + PokeAPI 补充种族值/身高/体重）"""
     details: Dict = {**poke}

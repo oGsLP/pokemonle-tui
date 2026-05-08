@@ -110,6 +110,7 @@ def find_pokemon(query: str, pokemon_list: list[PokemonEntry], index: dict[objec
 
 try:
     from prompt_toolkit.completion import Completion, Completer
+    from prompt_toolkit.formatted_text import FormattedText
 
     class PokemonCompleter(Completer):
         """prompt_toolkit 模糊补全器 — 输入时弹出候选列表"""
@@ -135,10 +136,16 @@ try:
                 type_color = TYPE_COLORS.get(type_key, "")
                 gen_str = GEN_MAP.get(p["generation"], (p["generation"],))[0]
                 display_text = f"{p['name']} ({p['name_en']}) #{p['id']:04d}"
-                type_indicator = f"[{types_str}]"
                 if type_color:
-                    type_indicator = f"[{types_str}|{type_color}]"
-                meta = f"{type_indicator} · {gen_str}"
+                    meta = FormattedText([
+                        ("bold", "["),
+                        (f"fg:{type_color}", types_str),
+                        ("bold", f"] · {gen_str}"),
+                    ])
+                else:
+                    meta = FormattedText([
+                        ("", f"[{types_str}] · {gen_str}"),
+                    ])
                 yield Completion(
                     text=p["name"],
                     start_position=-len(query),

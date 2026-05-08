@@ -108,8 +108,7 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
     table.add_column("中文名", style="bold", width=10)
     table.add_column("英文名", style="dim", width=14)
     for k in header_keys:
-        w = 12 if k == "属性" else 10
-        table.add_column(k, width=w, justify="center")
+        table.add_column(k, justify="center", no_wrap=True)
 
     rows = guesses_with_hints
 
@@ -144,9 +143,8 @@ def show_game_stats(pokemon_count: int) -> None:
 #  设置面板
 # ══════════════════════════════════════════════
 
-def show_settings(pokemon_list: list[PokemonEntry], config: ConfigDict) -> ConfigDict:
+def show_settings(config: ConfigDict) -> ConfigDict:
     """交互式设置面板"""
-    _ = pokemon_list
     cfg = dict(config)
 
     if not cfg.get("generations"):
@@ -193,7 +191,7 @@ def show_settings(pokemon_list: list[PokemonEntry], config: ConfigDict) -> Confi
         ]
         for i, (key, label) in enumerate(opts, 1):
             mark = "[green]✓[/green]" if cfg.get(key) else "[red]✗[/red]"
-            console.print(f"    {mark} {i}. {label}")
+            console.print(f"    {mark} {i}. {label}  [dim](t{i} 切换)[/dim]")
 
         console.print(f"\n  [cyan]a[/cyan]=全选世代  [cyan]n[/cyan]=取消全选  [cyan]s[/cyan]=保存  [cyan]q[/cyan]=取消")
 
@@ -328,6 +326,16 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 console.print(f"[yellow]找不到「{guess_input}」[/yellow]")
             continue
 
+        # 歧义检测: 非精确匹配时检查是否有其他高分候选项
+        q_norm = guess_input.strip().lower()
+        guess_en = guess["name_en"].lower()
+        if q_norm not in (guess["name"], guess_en, str(guess["id"]), f"#{guess['id']}"):
+            alt_matches = get_fuzzy_matches(guess_input, pokemon_list, limit=3)
+            others = [m for m in alt_matches if m["id"] != guess["id"]]
+            if others:
+                alt_names = "  ".join(f"[cyan]{m['name']}[/cyan]({m['name_en']})" for m in others[:2])
+                console.print(f"[yellow]⚠ 你是不是指: {alt_names}？已按最佳匹配选择 {guess['name']}。[/yellow]")
+
         if guess["name"] in guessed_names:
             console.print(f"[yellow]已经猜过 {guess['name']} 了！[/yellow]")
             continue
@@ -437,7 +445,7 @@ def main() -> None:
         elif choice == "2":
             show_game_stats(len(pokemon_list))
         elif choice == "3":
-            config = show_settings(pokemon_list, config)
+            config = show_settings(config)
         elif choice.lower() in ("q", "quit", "exit"):
             console.print("\n[dim]再见！捕捉更多宝可梦！[/dim] 🎉")
             break

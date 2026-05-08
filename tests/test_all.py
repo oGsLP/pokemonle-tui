@@ -3,6 +3,7 @@
 运行: cd /home/ogslp/Projects/Opencode/pokemonle-tui && python3 -m pytest tests/ -v
 """
 # pyright: reportMissingImports=false, reportUnusedImport=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportMissingParameterType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false
+import json
 import os
 import sys
 import pytest
@@ -17,10 +18,11 @@ from constants import (
     Hint, TYPE_COLORS, GEN_MAP, ALL_GENERATIONS, GAME_MODE_PRESETS, DEFAULT_CONFIG,
 )
 from data import load_pokemon_data, build_pokemon_index, fetch_pokeapi_data, fetch_species_data, get_pokemon_details
-from config import load_config, save_config
+from config import load_config, save_config, _validate_config
 from comparison import compare_pokemon
 from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon
 from stats import save_game_stats, get_stats_summary, _load_stats
+from game import _format_hint
 
 
 # ══════════════════════════════════════════════
@@ -510,3 +512,172 @@ class TestStats:
         assert "宝可梦池" in summary
         assert "1082" in summary
         assert "胜率" in summary
+
+
+# ══════════════════════════════════════════════
+#  Test: game.py _format_hint
+# ══════════════════════════════════════════════
+
+class TestFormatHint:
+    def test_exact_hint(self):
+        t = _format_hint("编号", "#0025", "exact")
+        assert "#0025" in t.plain
+
+    def test_close_with_arrow(self):
+        t = _format_hint("编号", "#0020", "close", "↑")
+        assert "#0020" in t.plain
+        assert "↑" in t.plain
+
+    def test_miss_dim(self):
+        t = _format_hint("属性", "火", "miss")
+        assert "火" in t.plain
+
+    def test_type_partial_highlights_matched(self):
+        t = _format_hint("属性", "草/飞行", "partial", "草")
+        assert "草" in t.plain
+        assert "飞行" in t.plain
+
+    def test_type_miss_no_highlight(self):
+        t = _format_hint("属性", "水/火", "miss", "")
+        assert "水" in t.plain
+        assert "火" in t.plain
+
+    def test_far_hint(self):
+        t = _format_hint("身高", "1.5m", "far", "↓")
+        assert "1.5m" in t.plain
+        assert "↓" in t.plain
+
+
+# ══════════════════════════════════════════════
+#  Test: config.py _validate_config
+# ══════════════════════════════════════════════
+
+class TestConfigValidation:
+    def test_preserves_valid_values(self):
+        cfg = dict(DEFAULT_CONFIG)
+        validated = _validate_config(cfg)
+        assert validated == cfg
+
+    def test_coerces_int_from_string(self):
+        cfg = {**DEFAULT_CONFIG, "max_guesses": "15"}
+        validated = _validate_config(cfg)
+        assert validated["max_guesses"] == 15
+
+    def test_falls_back_on_invalid_int(self):
+        cfg = {**DEFAULT_CONFIG, "max_guesses": "abc"}
+        validated = _validate_config(cfg)
+        assert validated["max_guesses"] == DEFAULT_CONFIG["max_guesses"]
+
+    def test_coerces_bool(self):
+        cfg = {**DEFAULT_CONFIG, "show_more_stats": 1}
+        validated = _validate_config(cfg)
+        assert validated["show_more_stats"] is True
+
+    def test_falls_back_wrong_list_type(self):
+        cfg = {**DEFAULT_CONFIG, "generations": "not_a_list"}
+        validated = _validate_config(cfg)
+        assert validated["generations"] == DEFAULT_CONFIG["generations"]
+
+
+# ══════════════════════════════════════════════
+#  Test: fuzzy.py — cached index + precomputed
+# ══════════════════════════════════════════════
+
+class TestFuzzyCached:
+    def test_find_pokemon_with_cached_index(self, pokemon_list):
+        idx = build_pokemon_index(pokemon_list)
+        result = find_pokemon("皮卡丘", pokemon_list, index=idx)
+        assert result is not None
+        assert result["id"] == 25
+
+    def test_find_pokemon_without_index_still_works(self, pokemon_list):
+        result = find_pokemon("皮卡丘", pokemon_list)
+        assert result is not None
+        assert result["id"] == 25
+
+    def test_score_uses_precomputed_fields(self, pokemon_25):
+        assert "_name_en_norm" in pokemon_25
+        assert pokemon_25["_name_en_norm"] == "pikachu"
+        score = score_pokemon("pikachu", pokemon_25)
+        assert score == 100
+
+    def test_score_fallback_no_precomputed(self):
+        poke = {"name": "Test", "name_en": "Testmon", "id": 999, "types": [], "generation": "第一世代"}
+        score = score_pokemon("testmon", poke)
+        assert score == 100
+
+
+# ══════════════════════════════════════════════
+#  Test: data.py — mock PokeAPI, no skip
+# ══════════════════════════════════════════════
+
+class TestDataMocked:
+    def test_fetch_pokeapi_mock(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        import data as _data
+
+        cache_dir = str(tmp_path / "mock_cache")
+        monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+            def read(self):
+                return json.dumps({
+                    "height": 7, "weight": 69,
+                    "stats": [{"stat": {"name": "speed"}, "base_stat": 90}],
+                    "abilities": [{"ability": {"name": "static"}}],
+                }).encode()
+
+        monkeypatch.setattr(_ur, "urlopen", lambda *a, **kw: FakeResponse())
+        result = fetch_pokeapi_data(25)
+        assert result is not None
+        assert result["height"] == 7
+        assert result["weight"] == 69
+        assert result["stats"]["speed"] == 90
+
+    def test_fetch_pokeapi_http_error(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        import data as _data
+
+        cache_dir = str(tmp_path / "mock_cache2")
+        monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        class FakeErrorResponse:
+            status = 404
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+            def read(self):
+                return b"Not Found"
+
+        monkeypatch.setattr(_ur, "urlopen", lambda *a, **kw: FakeErrorResponse())
+        result = fetch_pokeapi_data(99999)
+        assert result is None
+
+    def test_cached_or_fetch_uses_cache(self, monkeypatch, tmp_path):
+        import data as _data
+
+        cache_dir = str(tmp_path / "mock_cache3")
+        monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        cache_file = os.path.join(cache_dir, "0025.json")
+        with open(cache_file, "w") as f:
+            json.dump({"height": 4, "weight": 60, "stats": {}, "abilities": []}, f)
+
+        result = fetch_pokeapi_data(25)
+        assert result is not None
+        assert result["height"] == 4

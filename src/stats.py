@@ -1,6 +1,7 @@
 """
 游戏统计 — 胜率/猜测次数的持久化
 """
+import fcntl
 import json
 import os
 import sys
@@ -30,14 +31,21 @@ def _load_stats() -> Dict:
 
 def save_game_stats(won: bool, num_guesses: int) -> None:
     """保存一局游戏的结果"""
-    stats = _load_stats()
-    stats["total"] += 1
-    if won:
-        stats["wins"] += 1
-    stats["guesses_history"].append(num_guesses)
-    # 静默失败可接受：统计丢失不影响游戏体验
+    path = _stats_file()
     try:
-        with open(_stats_file(), "w") as f:
+        with open(path, "a+") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.seek(0)
+            try:
+                stats = json.load(f) if os.path.getsize(path) > 0 else {"wins": 0, "total": 0, "guesses_history": []}
+            except json.JSONDecodeError:
+                stats = {"wins": 0, "total": 0, "guesses_history": []}
+            stats["total"] += 1
+            if won:
+                stats["wins"] += 1
+            stats["guesses_history"].append(num_guesses)
+            f.seek(0)
+            f.truncate()
             json.dump(stats, f, ensure_ascii=False)
     except OSError:
         pass

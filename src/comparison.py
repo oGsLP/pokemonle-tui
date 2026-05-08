@@ -151,16 +151,13 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict)
             hints.append(Hint("体重", f"{w2:.1f}kg", "far", arrow))
 
     # ── 更多外形信息 ──
-    if config.get("show_more_appearance"):
-        if "height" in target and "height" in guess:
-            target_height = cast(int, target["height"])
-            guess_height = cast(int, guess["height"])
-            h_ratio = target_height / max(guess_height, 1)
-            if h_ratio > 1.5:
-                hints.append(Hint("体型", "更大", "miss"))
-            elif h_ratio < 0.67:
-                hints.append(Hint("体型", "更小", "miss"))
-            else:
-                hints.append(Hint("体型", "差不多", "partial"))
+    if config.get("show_more_appearance") and "height" in target and "height" in guess:
+        h_ratio = target_height / max(guess_height, 1)
+        if h_ratio > 1.5:
+            hints.append(Hint("体型", "更大", "miss"))
+        elif h_ratio < 0.67:
+            hints.append(Hint("体型", "更小", "miss"))
+        else:
+            hints.append(Hint("体型", "差不多", "partial"))
 
     return hints
