@@ -31,7 +31,7 @@ except ImportError:
     CompleteStyle = None
 
 
-console = Console()
+_console = Console()
 
 # Hint label → icon mapping (matches web version: success/warning/info)
 HINT_ICON = {"exact": "✓ ", "partial": "", "close": "", "miss": "", "far": ""}
@@ -43,6 +43,14 @@ ARROW_DOWN = "bold red"
 
 def _hint_color(level: str) -> str:
     return HINT_COLOR.get(level, "white")
+
+
+def _safe_save_stats(won: bool, guesses: int) -> None:
+    """Save stats, logging but not crashing on failure."""
+    try:
+        save_game_stats(won, guesses)
+    except OSError:
+        pass  # Already logged in save_game_stats
 
 
 def show_logo() -> None:
@@ -203,8 +211,11 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         if choice == "q":
             return config
         elif choice == "s":
-            save_config(cfg)
-            console.print("[green]✅ 设置已保存[/green]")
+            try:
+                save_config(cfg)
+                console.print("[green]✅ 设置已保存[/green]")
+            except OSError:
+                console.print("[red]❌ 保存失败！[/red]")
             return cfg
         elif choice == "a":
             cfg["generations"] = list(ALL_GENERATIONS)
@@ -293,7 +304,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 f"\n[dim]退出。答案是 [bold]{target['name']}[/bold] "
                 f"({target['name_en']}, #{target['id']:04d})[/dim]"
             )
-            save_game_stats(False, len(guesses_with_hints))
+            _safe_save_stats(False, len(guesses_with_hints))
             return
 
         guess_input = guess_input.strip()
@@ -305,7 +316,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 f"\n[yellow]退出。答案是 [bold]{target['name']}[/bold] "
                 f"({target['name_en']}, #{target['id']:04d})[/yellow]"
             )
-            save_game_stats(False, len(guesses_with_hints))
+            _safe_save_stats(False, len(guesses_with_hints))
             return
 
         if guess_input.lower() == "reveal":
@@ -313,7 +324,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 f"\n[yellow]答案是 [bold]{target['name']}[/bold] "
                 f"({target['name_en']}, #{target['id']:04d})[/yellow]"
             )
-            save_game_stats(False, len(guesses_with_hints))
+            _safe_save_stats(False, len(guesses_with_hints))
             return
 
         guess = cast(PokemonEntry | None, find_pokemon(guess_input, pokemon_list, cast(dict[object, PokemonEntry], pokemon_index)))
@@ -371,7 +382,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 ),
                 border_style="dim", title="🏆 You Win!",
             ))
-            save_game_stats(True, len(guesses_with_hints))
+            _safe_save_stats(True, len(guesses_with_hints))
             return
 
         if len(guesses_with_hints) >= max_guesses:
@@ -382,7 +393,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 ),
                 border_style="dim", title="💀 Game Over",
             ))
-            save_game_stats(False, len(guesses_with_hints))
+            _safe_save_stats(False, len(guesses_with_hints))
             return
 
 

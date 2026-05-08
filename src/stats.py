@@ -48,7 +48,8 @@ def save_game_stats(won: bool, num_guesses: int) -> None:
             f.truncate()
             json.dump(stats, f, ensure_ascii=False)
     except OSError:
-        pass
+        print(f"警告: 无法保存游戏统计: {path}", file=sys.stderr)
+        raise
 
 
 def get_stats_summary(pokemon_count: int) -> str:

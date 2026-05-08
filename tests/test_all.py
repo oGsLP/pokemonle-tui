@@ -229,6 +229,17 @@ class TestConfig:
         finally:
             constants.CONFIG_FILE = old
 
+    def test_save_failure_raises(self, tmp_path):
+        """写入失败时应该抛出 OSError"""
+        old = constants.CONFIG_FILE
+        try:
+            bad_path = str(tmp_path / "nonexistent" / "config.json")
+            constants.CONFIG_FILE = bad_path
+            with pytest.raises(OSError):
+                save_config({"game_mode": "easy"})
+        finally:
+            constants.CONFIG_FILE = old
+
 
 # ══════════════════════════════════════════════
 #  Test: comparison.py
@@ -394,6 +405,26 @@ class TestComparison:
         assert "草" in matched
         assert "龙" in matched
 
+    def test_appearance_without_height_no_crash(self):
+        """开启体型比较但缺少身高数据时不应崩溃且不产生体型提示"""
+        target = {"id": 1, "types": ["草"], "generation": "第一世代"}
+        guess = {"id": 2, "types": ["草"], "generation": "第一世代"}
+        hints = compare_pokemon(target, guess,
+                                 {**DEFAULT_CONFIG, "show_more_appearance": True})
+        labels = [h.label for h in hints]
+        assert "体型" not in labels, "缺少身高数据时不应生成体型提示"
+
+    def test_appearance_with_height(self):
+        """有身高数据时开启体型比较应生成体型提示"""
+        target = {"id": 1, "types": ["草"], "generation": "第一世代",
+                   "height": 40, "weight": 69}
+        guess = {"id": 4, "types": ["火"], "generation": "第一世代",
+                  "height": 60, "weight": 85}
+        hints = compare_pokemon(target, guess,
+                                 {**DEFAULT_CONFIG, "show_more_appearance": True})
+        labels = [h.label for h in hints]
+        assert "体型" in labels, "有身高数据时应生成体型提示"
+
 
 # ══════════════════════════════════════════════
 #  Test: fuzzy.py
@@ -513,6 +544,17 @@ class TestStats:
         assert "宝可梦池" in summary
         assert "1082" in summary
         assert "胜率" in summary
+
+    def test_save_failure_raises(self, monkeypatch, tmp_path):
+        """写入失败时应该抛出 OSError"""
+        old = constants.STATS_FILE
+        try:
+            bad_path = str(tmp_path / "nonexistent" / "stats.json")
+            constants.STATS_FILE = bad_path
+            with pytest.raises(OSError):
+                save_game_stats(True, 3)
+        finally:
+            constants.STATS_FILE = old
 
 
 # ══════════════════════════════════════════════

@@ -65,3 +65,4 @@ def save_config(cfg: dict[str, object]) -> None:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     except OSError as exc:
         print(f"警告: 无法保存配置文件: {exc}", file=sys.stderr)
+        raise
