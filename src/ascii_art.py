@@ -109,7 +109,7 @@ def get_sprite_path(name_en: str, pokemon_id: int = 0) -> Optional[str]:
 
 def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
                 crop_ratio: float = 0.10, h_align: str = "left",
-                v_align: str = "top") -> bool:
+                v_align: Optional[str] = None) -> bool:
     """在终端中直接渲染展示宝可梦精灵图
 
     展示前会对图片进行裁剪，去掉四周空白区域。
@@ -120,7 +120,7 @@ def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
         max_width: 最大渲染宽度（字符数）
         crop_ratio: 四边裁剪比例，默认 0.10 即各裁 10%
         h_align: 水平对齐，默认 "left"（居左）
-        v_align: 垂直对齐，默认 "top"（置顶）
+        v_align: 垂直对齐，默认 None（当前位置显示）
 
     Returns:
         是否成功展示
@@ -142,7 +142,16 @@ def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
         cropped = pil_img.crop((left, top, right, bottom))
 
         term_img = auto_image_class()(cropped, width=max_width)
-        term_img.draw(h_align=h_align, v_align=v_align, pad_height=0)
+        # Avoid filling the whole terminal with blank padding.
+        # Use a small pad_height and top alignment so the image renders at the current cursor
+        # position instead of clearing the screen and leaving a large blank gap.
+        term_img.draw(
+            h_align=h_align,
+            v_align=v_align or "top",
+            pad_height=1,
+            scroll=True,
+        )
+        print()  # Add newline after image to prevent text from appearing on the same line
         return True
     except Exception:
         return False
