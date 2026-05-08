@@ -3,8 +3,6 @@ UI 与游戏逻辑 — logo/表格/设置面板/游戏主循环
 """
 from __future__ import annotations
 
-import contextlib
-import io
 import os
 import random
 import threading
@@ -17,10 +15,10 @@ from rich.panel import Panel
 from rich.text import Text
 from rich import box
 from rich.align import Align
-from rich.live import Live
 
 from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_COLORS, TYPE_CN_TO_EN_MAP
 from poketypes import ConfigDict, GuessRecord, HintRecord, PokemonEntry
+import data as _data
 from data import get_pokemon_details, fetch_species_data, build_pokemon_index
 from config import load_config, save_config
 from comparison import compare_pokemon, compute_remaining_pool
@@ -39,7 +37,8 @@ except ImportError:
 _console = Console()
 
 # Hint label → icon mapping (matches web version: success/warning/info)
-HINT_ICON = {"exact": "✓ ", "partial": "", "close": "", "miss": "", "far": ""}
+HINT_ICON = {"exact": "", "partial": "", "close": "", "miss": "", "far": ""}
+HINT_TAIL = {"exact": " ✓", "partial": "", "close": "", "miss": "", "far": ""}
 HINT_COLOR = {"exact": "bold green", "partial": "bold yellow", "close": "bold yellow",
               "miss": "dim", "far": "dim"}
 ARROW_UP = "bold green"
@@ -76,24 +75,26 @@ def show_logo() -> None:
 
 def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
     color = _hint_color(level)
-    icon = HINT_ICON.get(level, "")
-    t = Text(icon, style=color) if icon else Text(style=color)
+    t = Text(style=color)
     if label == "属性" and val:
         matched_types = set(extra.split("/")) if extra else set()
         for idx, type_name in enumerate(val.split("/")):
             if idx > 0:
                 _ = t.append("/", style=color)
             type_key = TYPE_CN_TO_EN_MAP.get(type_name)
-            type_style = TYPE_COLORS.get(type_key, color) if type_key else color
+            type_color = TYPE_COLORS.get(type_key, color) if type_key else color
             if level == "partial" and type_name in matched_types:
-                _ = t.append(type_name, style=type_style)
+                _ = t.append(type_name, style=f"white on {type_color}")
             else:
-                _ = t.append(type_name, style=f"dim {type_style}")
+                _ = t.append(type_name, style=f"dim {type_color}")
     else:
         _ = t.append(val, style=color)
     if extra and label != "属性":
         arrow_style = ARROW_UP if extra == "↑" else ARROW_DOWN
         _ = t.append(f" {extra}", style=arrow_style)
+    tail = HINT_TAIL.get(level, "")
+    if tail:
+        _ = t.append(tail, style="bold green")
     return t
 
 
@@ -270,8 +271,8 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         _console.print("[red]请至少选择一个世代！[/red]")
         return
 
+    _data.QUIET = True
     target = random.choice(pool)
-    # Start PokeAPI fetch in background immediately at game start
     target_details: PokemonEntry = cast(PokemonEntry, dict(target))
     _target_done = threading.Event()
     _target_status: str = "loading"
@@ -279,9 +280,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     def _fetch_target() -> None:
         nonlocal target_details, _target_status
         try:
-            with contextlib.redirect_stderr(io.StringIO()):
-                enriched = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
-                species = cast(dict[str, object] | None, fetch_species_data(target["id"]))
+            enriched = cast(PokemonEntry, get_pokemon_details(
+                cast(dict[str, object], target)))
+            species = cast(dict[str, object] | None,
+                           fetch_species_data(target["id"]))
             if species:
                 enriched["egg_groups"] = cast(list[str], species.get("egg_groups", []))
                 cr = species.get("capture_rate")
@@ -321,12 +323,13 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         ),
         border_style="dim", title="🎯 猜猜看",
     ))
-    with Live("[dim]🔄 获取中...[/dim]", console=_console, refresh_per_second=4, transient=True):
+    with _console.status("[dim]🔄 获取中...[/dim]", spinner="dots"):
         _target_done.wait(timeout=8)
 
     while len(guesses_with_hints) < max_guesses:
         remaining = max_guesses - len(guesses_with_hints)
-        session.message = f"\n🔮 还剩 {remaining}/{max_guesses} 次 | 猜: "
+        pool_remaining = compute_remaining_pool(pool, guesses_with_hints, config)
+        session.message = f"\n🔮 还剩 {remaining}/{max_guesses} 次 | 🎯 剩余 {pool_remaining} 只 | 猜: "
 
         try:
             guess_input = session.prompt()
@@ -383,9 +386,11 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             continue
 
         guessed_names.add(guess["name"])
-        with contextlib.redirect_stderr(io.StringIO()):
-            guess_details = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], guess)))
-            guess_species = cast(dict[str, object] | None, fetch_species_data(guess["id"]))
+        with _console.status("[dim]🔄 获取中...[/dim]", spinner="dots"):
+            guess_details = cast(PokemonEntry, get_pokemon_details(
+                cast(dict[str, object], guess)))
+            guess_species = cast(dict[str, object] | None,
+                                 fetch_species_data(guess["id"]))
         if guess_species:
             guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
         _target_done.wait(timeout=8)

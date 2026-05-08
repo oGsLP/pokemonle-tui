@@ -180,8 +180,11 @@ def compute_remaining_pool(
             candidate_hints = compare_pokemon(guess_poke, candidate, config)
             actual_levels = {h.label: h.level for h in actual_hints}
             candidate_levels = {h.label: h.level for h in candidate_hints}
-            if actual_levels != candidate_levels:
-                consistent = False
+            for label in actual_levels:
+                if label in candidate_levels and actual_levels[label] != candidate_levels[label]:
+                    consistent = False
+                    break
+            if not consistent:
                 break
         if consistent:
             surviving += 1

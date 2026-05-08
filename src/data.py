@@ -11,6 +11,9 @@ from typing import Callable, Dict, List, Optional
 
 from constants import DATA_FILE, CACHE_DIR
 
+# When True, suppress all progress prints (for threaded/background use)
+QUIET = False
+
 
 def load_pokemon_data() -> List[Dict]:
     """加载宝可梦基础数据 (来自 pokemon_full_list.json)"""
@@ -76,23 +79,28 @@ def _cached_or_fetch(
             with open(cache_file, "r") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            print(f"警告: 缓存文件损坏，跳过: {cache_file}", file=sys.stderr)
+            if not QUIET:
+                print(f"警告: 缓存文件损坏，跳过: {cache_file}", file=sys.stderr)
             return None
 
-    print(f"  ⏳ 正在从 PokeAPI 获取 {label}...", file=sys.stderr)
+    if not QUIET:
+        print(f"  ⏳ 正在从 PokeAPI 获取 {label}...", file=sys.stderr)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "PokemonleCLI/1.0"})
         ssl_context = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=8, context=ssl_context) as resp:
             if resp.status != 200:
-                print(f"  ⚠ PokeAPI 返回状态码 {resp.status} ({label})", file=sys.stderr)
+                if not QUIET:
+                    print(f"  ⚠ PokeAPI 返回状态码 {resp.status} ({label})", file=sys.stderr)
                 return None
             data = json.loads(resp.read().decode())
     except urllib.error.URLError as exc:
-        print(f"  ⚠ 获取 {label} 失败: {exc}", file=sys.stderr)
+        if not QUIET:
+            print(f"  ⚠ 获取 {label} 失败: {exc}", file=sys.stderr)
         return None
     except Exception as exc:
-        print(f"  ⚠ 处理 {label} 失败: {exc}", file=sys.stderr)
+        if not QUIET:
+            print(f"  ⚠ 处理 {label} 失败: {exc}", file=sys.stderr)
         return None
 
     result = extract(data)
@@ -102,8 +110,10 @@ def _cached_or_fetch(
             json.dump(result, f)
         os.replace(tmp_file, cache_file)
     except OSError as exc:
-        print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
-    print(f"  ✅ {label} 已缓存", file=sys.stderr)
+        if not QUIET:
+            print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
+    if not QUIET:
+        print(f"  ✅ {label} 已缓存", file=sys.stderr)
     return result
 
 
