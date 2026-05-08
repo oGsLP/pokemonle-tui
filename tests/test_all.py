@@ -5,6 +5,7 @@
 # pyright: reportMissingImports=false, reportUnusedImport=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportMissingParameterType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false
 import json
 import os
+import random
 import sys
 import pytest
 
@@ -681,3 +682,122 @@ class TestDataMocked:
         result = fetch_pokeapi_data(25)
         assert result is not None
         assert result["height"] == 4
+
+
+# ══════════════════════════════════════════════
+#  Test: game.py run_game
+# ══════════════════════════════════════════════
+
+import game
+
+
+class _FakeSession:
+    def __init__(self, inputs):
+        self._inputs = list(inputs)
+        self._idx = 0
+        self.message = ""
+
+    def prompt(self):
+        if self._idx >= len(self._inputs):
+            raise EOFError
+        val = self._inputs[self._idx]
+        self._idx += 1
+        return val
+
+
+def _mock_game_env(monkeypatch, pokemon_list, target, inputs, tmp_path):
+    import game as _game
+
+    stats_file = str(tmp_path / "stats.json")
+    monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(inputs))
+    monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+    monkeypatch.setattr("random.choice", lambda s: target)
+    monkeypatch.setattr("game.console.print", lambda *a, **kw: None)
+    monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
+
+    def _fake_details(poke):
+        d = dict(poke)
+        d.update({"stat_total": 300, "speed": 90, "hp": 45, "attack": 50,
+                   "defense": 40, "sp_attack": 60, "sp_defense": 50,
+                   "height": 40, "weight": 60, "stats": {}})
+        return d
+    monkeypatch.setattr("game.get_pokemon_details", _fake_details)
+    monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+
+    config = dict(DEFAULT_CONFIG)
+    _game.run_game(pokemon_list, config)
+
+
+class TestRunGame:
+    def test_win_on_exact_match(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["妙蛙种子"], tmp_path)
+        assert stat_calls == [(True, 1)]
+
+    def test_quit_saves_loss(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["q"], tmp_path)
+        assert stat_calls == [(False, 0)]
+
+    def test_reveal_saves_loss(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["reveal"], tmp_path)
+        assert stat_calls == [(False, 0)]
+
+    def test_lose_on_max_guesses(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+
+        target = pokemon_list[0]
+        all_pokemon = [p["name"] for p in pokemon_list if p["id"] != target["id"]]
+        bad_guesses = all_pokemon[:15]
+
+        import game as _game
+        monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(bad_guesses))
+        monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+        monkeypatch.setattr("random.choice", lambda s: target)
+        monkeypatch.setattr("game.console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+        _game.run_game(pokemon_list, {**DEFAULT_CONFIG, "max_guesses": 15})
+        assert stat_calls[-1] == (False, 15)
+
+    def test_empty_pool_returns_early(self, monkeypatch, pokemon_list, tmp_path):
+        import game as _game
+        config = {**DEFAULT_CONFIG, "generations": []}
+        monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession([]))
+        monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+        _game.run_game(pokemon_list, config)
+
+    def test_not_found_then_quit(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["zzzz_not_found", "q"], tmp_path)
+        assert len(stat_calls) > 0
+
+    def test_mischief_mode_no_crash(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        config = {**DEFAULT_CONFIG, "mischief": True, "max_guesses": 15}
+        import game as _game
+        monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(["皮卡丘", "q"]))
+        monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+
+        real_choice = random.choice
+        monkeypatch.setattr("random.choice", lambda s: target if isinstance(s[0], dict) else real_choice(s))
+
+        monkeypatch.setattr("game.console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
+        monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+        _game.run_game(pokemon_list, config)

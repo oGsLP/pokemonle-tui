@@ -31,6 +31,8 @@ def _validate_config(cfg: JsonObject) -> JsonObject:
             validated[k] = val if isinstance(val, list) else default
         else:
             validated[k] = val if isinstance(val, type(default)) else default
+    if isinstance(validated.get("generations"), list) and not validated["generations"]:
+        validated["generations"] = list(constants.ALL_GENERATIONS)
     return validated
 
 
