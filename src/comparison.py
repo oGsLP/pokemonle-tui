@@ -128,10 +128,9 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict)
         guess_height = cast(int, guess["height"])
         diff_h = target_height - guess_height
         arrow = "↑" if diff_h > 0 else "↓"
-        h1 = target_height / 10
         h2 = guess_height / 10
         if diff_h == 0:
-            hints.append(Hint("身高", f"{h1:.1f}m", "exact"))
+            hints.append(Hint("身高", f"{h2:.1f}m", "exact"))
         elif abs(diff_h) <= preset["height_range"]:
             hints.append(Hint("身高", f"{h2:.1f}m", "close", arrow))
         else:
@@ -143,10 +142,9 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict)
         guess_weight = cast(int, guess["weight"])
         diff_w = target_weight - guess_weight
         arrow = "↑" if diff_w > 0 else "↓"
-        w1 = target_weight / 10
         w2 = guess_weight / 10
         if diff_w == 0:
-            hints.append(Hint("体重", f"{w1:.1f}kg", "exact"))
+            hints.append(Hint("体重", f"{w2:.1f}kg", "exact"))
         elif abs(diff_w) <= preset["weight_range"]:
             hints.append(Hint("体重", f"{w2:.1f}kg", "close", arrow))
         else:

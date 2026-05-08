@@ -13,10 +13,10 @@ from poketypes import PokemonEntry
 def score_pokemon(query: str, p: PokemonEntry) -> int:
     """给宝可梦打分：query 与 name 的匹配程度，分数越高越相关"""
     q = query.lower().strip()
-    name_en = p["name_en"].lower().replace("-", "").replace(" ", "")
+    name_en_norm: str = p.get("_name_en_norm", p["name_en"].lower().replace("-", "").replace(" ", ""))
     name_cn = p["name"]
-    name_jp = p.get("name_jp", "").lower()
-    poke_id = str(p["id"])
+    name_jp_norm: str = p.get("_name_jp_norm", p.get("name_jp", "").lower())
+    poke_id = p.get("_id_str", str(p["id"]))
 
     # 编号精确匹配
     if q == poke_id or q == f"#{poke_id}":
@@ -28,25 +28,25 @@ def score_pokemon(query: str, p: PokemonEntry) -> int:
     if name_cn == q:
         return 100
     # 英文名精确
-    if name_en == q:
+    if name_en_norm == q:
         return 100
     # 日文名精确
-    if name_jp and name_jp == q:
+    if name_jp_norm and name_jp_norm == q:
         return 100
     # 中文名前缀
     if name_cn.startswith(q) and len(q) >= 1:
         return 85
     # 英文名前缀
-    if name_en.startswith(q):
+    if name_en_norm.startswith(q):
         return 80
     # 日文名前缀
-    if name_jp and name_jp.startswith(q):
+    if name_jp_norm and name_jp_norm.startswith(q):
         return 78
     # 中文名包含
     if q in name_cn and len(q) >= 2:
         return 70
     # 英文名包含
-    if q in name_en and len(q) >= 3:
+    if q in name_en_norm and len(q) >= 3:
         return 60
     # 编号接近
     try:
@@ -56,9 +56,8 @@ def score_pokemon(query: str, p: PokemonEntry) -> int:
         pass
     # 乱序字符匹配 (容忍 typo)
     if len(q) >= 3:
-        en_clean = name_en
         q_idx = 0
-        for ch in en_clean:
+        for ch in name_en_norm:
             if q_idx < len(q) and q[q_idx] == ch:
                 q_idx += 1
         if q_idx >= len(q) - 1:
@@ -80,10 +79,10 @@ def get_fuzzy_matches(query: str, pokemon_list: list[PokemonEntry], limit: int =
     return [p for _, p in scored[:limit]]
 
 
-def find_pokemon(query: str, pokemon_list: list[PokemonEntry]) -> PokemonEntry | None:
+def find_pokemon(query: str, pokemon_list: list[PokemonEntry], index: dict[object, PokemonEntry] | None = None) -> PokemonEntry | None:
     """精确查找宝可梦（中英文名、编号），找不到则取最佳模糊匹配"""
     q = query.strip().lower()
-    idx = build_pokemon_index(cast(list[dict[str, object]], pokemon_list))
+    idx = cast(dict[object, PokemonEntry], index if index is not None else build_pokemon_index(cast(list[dict[str, object]], pokemon_list)))
 
     # O(1) exact lookups
     try:

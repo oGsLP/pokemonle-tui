@@ -17,7 +17,7 @@ from rich.align import Align
 
 from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_COLORS, TYPE_CN_TO_EN_MAP
 from poketypes import ConfigDict, GuessRecord, HintRecord, PokemonEntry
-from data import get_pokemon_details, fetch_species_data
+from data import get_pokemon_details, fetch_species_data, build_pokemon_index
 from config import load_config, save_config
 from comparison import compare_pokemon
 from fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
@@ -242,7 +242,8 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         return
 
     gen_filter = set(config.get("generations", []))
-    max_guesses = config.get("max_guesses", 10)
+    max_guesses_raw = config.get("max_guesses", 10)
+    max_guesses = max(3, min(15, int(max_guesses_raw) if isinstance(max_guesses_raw, (int, float)) else 10))
 
     pool = [p for p in pokemon_list if p["generation"] in gen_filter]
     if not pool:
@@ -254,11 +255,15 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     species_data = cast(dict[str, object] | None, fetch_species_data(target["id"]))
     if species_data:
         target_details["egg_groups"] = cast(list[str], species_data.get("egg_groups", []))
-        target_details["capture_rate"] = int(cast(int, species_data.get("capture_rate", 0)))
+        cr = species_data.get("capture_rate")
+        target_details["capture_rate"] = int(cr) if cr is not None else 0
 
     guesses_with_hints: list[GuessRecord] = []
     guessed_names: set[str] = set()
     start_time = time.time()
+
+    # 构建快速索引 (游戏内复用，避免每次 guess 重建)
+    pokemon_index: dict[object, object] = build_pokemon_index(cast(list[dict[str, object]], pokemon_list))
 
     # 补全会话
     completer = PokemonCompleter(pokemon_list)
@@ -313,7 +318,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             save_game_stats(False, len(guesses_with_hints))
             return
 
-        guess = cast(PokemonEntry | None, find_pokemon(guess_input, pokemon_list))
+        guess = cast(PokemonEntry | None, find_pokemon(guess_input, pokemon_list, cast(dict[object, PokemonEntry], pokemon_index)))
         if not guess:
             suggestions = cast(list[PokemonEntry], get_fuzzy_matches(guess_input, pokemon_list, limit=5))
             if suggestions:
@@ -337,7 +342,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         # 小恶作剧模式
         if config.get("mischief") and hints:
             mischief_indices = [i for i, h in enumerate(hints)
-                                if len(h) == 4 and h[2] != "exact"]
+                                if len(h) == 4 and h[2] != "exact" and h[3] is not None]
             if mischief_indices:
                 idx = random.choice(mischief_indices)
                 label, val, level, arrow = hints[idx]
@@ -383,7 +388,11 @@ def main() -> None:
 
     show_logo()
     console.print("[dim]正在加载宝可梦数据...[/dim]")
-    pokemon_list = load_pokemon_data()
+    try:
+        pokemon_list = load_pokemon_data()
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]错误: {exc}[/red]")
+        return
     console.print(f"[green]✅ 已加载 {len(pokemon_list)} 只宝可梦[/green]")
     pokemon_list = cast(list[PokemonEntry], pokemon_list)
 

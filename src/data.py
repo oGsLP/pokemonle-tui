@@ -15,15 +15,13 @@ from constants import DATA_FILE, CACHE_DIR
 def load_pokemon_data() -> List[Dict]:
     """加载宝可梦基础数据 (来自 pokemon_full_list.json)"""
     if not os.path.exists(DATA_FILE):
-        print(f"错误: 宝可梦数据文件不存在: {DATA_FILE}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"宝可梦数据文件不存在: {DATA_FILE}")
 
     try:
-        with open(DATA_FILE, "r", encoding="utf-8", errors="replace") as f:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
             raw = json.load(f)
     except json.JSONDecodeError as exc:
-        print(f"错误: 宝可梦数据文件 JSON 格式无效: {DATA_FILE} ({exc})", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"宝可梦数据文件 JSON 格式无效: {DATA_FILE} ({exc})") from exc
 
     if not raw:
         print(f"警告: 宝可梦数据为空: {DATA_FILE}", file=sys.stderr)
@@ -31,14 +29,18 @@ def load_pokemon_data() -> List[Dict]:
     pokemon: List[Dict] = []
     for entry in raw:
         try:
+            name_en = entry.get("name_en", "")
             pokemon.append({
                 "index": entry["index"],
                 "id": int(entry["index"]),
                 "name": entry["name"],
-                "name_en": entry.get("name_en", ""),
+                "name_en": name_en,
                 "name_jp": entry.get("name_jp", ""),
                 "types": entry.get("types", []),
                 "generation": entry.get("generation", ""),
+                "_name_en_norm": name_en.lower().replace("-", "").replace(" ", ""),
+                "_name_jp_norm": entry.get("name_jp", "").lower(),
+                "_id_str": str(int(entry["index"])),
             })
         except (KeyError, ValueError) as exc:
             print(f"警告: 跳过损坏的宝可梦数据条目: {exc}", file=sys.stderr)
@@ -80,6 +82,9 @@ def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
         req = urllib.request.Request(url, headers={"User-Agent": "PokemonleCLI/1.0"})
         ssl_context = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=8, context=ssl_context) as resp:
+            if resp.status != 200:
+                print(f"警告: PokeAPI 返回状态码 {resp.status} (宝可梦 {poke_id})", file=sys.stderr)
+                return None
             data = json.loads(resp.read().decode())
         result = {
             "height": data["height"],
@@ -87,9 +92,11 @@ def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
             "stats": {s["stat"]["name"]: s["base_stat"] for s in data["stats"]},
             "abilities": [a["ability"]["name"] for a in data["abilities"]],
         }
+        tmp_file = cache_file + ".tmp"
         try:
-            with open(cache_file, "w") as f:
+            with open(tmp_file, "w") as f:
                 json.dump(result, f)
+            os.replace(tmp_file, cache_file)
         except OSError as exc:
             print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
         return result
@@ -118,6 +125,9 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
         req = urllib.request.Request(url, headers={"User-Agent": "PokemonleCLI/1.0"})
         ssl_context = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=8, context=ssl_context) as resp:
+            if resp.status != 200:
+                print(f"警告: PokeAPI 返回状态码 {resp.status} (species {poke_id})", file=sys.stderr)
+                return None
             data = json.loads(resp.read().decode())
 
         result = {
@@ -132,9 +142,11 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
             "habitat": data.get("habitat", {}).get("name") if data.get("habitat") else None,
         }
 
+        tmp_file = cache_file + ".tmp"
         try:
-            with open(cache_file, "w") as f:
+            with open(tmp_file, "w") as f:
                 json.dump(result, f)
+            os.replace(tmp_file, cache_file)
         except OSError as exc:
             print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
         return result

@@ -16,6 +16,24 @@ def _config_file() -> str:
     return constants.CONFIG_FILE
 
 
+def _validate_config(cfg: JsonObject) -> JsonObject:
+    validated: JsonObject = {}
+    for k, default in constants.DEFAULT_CONFIG.items():
+        val = cfg.get(k, default)
+        if isinstance(default, bool):
+            validated[k] = bool(val)
+        elif isinstance(default, int):
+            try:
+                validated[k] = int(val)
+            except (ValueError, TypeError):
+                validated[k] = default
+        elif isinstance(default, list):
+            validated[k] = val if isinstance(val, list) else default
+        else:
+            validated[k] = val if isinstance(val, type(default)) else default
+    return validated
+
+
 def load_config() -> dict[str, object]:
     """从文件加载游戏配置，缺失字段自动补全"""
     path = _config_file()
@@ -30,7 +48,7 @@ def load_config() -> dict[str, object]:
             for k, v in constants.DEFAULT_CONFIG.items():
                 if k not in loaded_cfg:
                     loaded_cfg[k] = v
-            return loaded_cfg
+            return _validate_config(loaded_cfg)
         except json.JSONDecodeError:
             print(f"警告: 配置文件损坏，使用默认配置: {path}", file=sys.stderr)
         except OSError as exc:
