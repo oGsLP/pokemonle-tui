@@ -3,6 +3,8 @@ UI 与游戏逻辑 — logo/表格/设置面板/游戏主循环
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import random
 import threading
@@ -15,6 +17,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich import box
 from rich.align import Align
+from rich.live import Live
 
 from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_COLORS, TYPE_CN_TO_EN_MAP
 from poketypes import ConfigDict, GuessRecord, HintRecord, PokemonEntry
@@ -276,8 +279,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     def _fetch_target() -> None:
         nonlocal target_details, _target_status
         try:
-            enriched = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
-            species = cast(dict[str, object] | None, fetch_species_data(target["id"]))
+            with contextlib.redirect_stderr(io.StringIO()):
+                enriched = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
+                species = cast(dict[str, object] | None, fetch_species_data(target["id"]))
             if species:
                 enriched["egg_groups"] = cast(list[str], species.get("egg_groups", []))
                 cr = species.get("capture_rate")
@@ -317,7 +321,8 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         ),
         border_style="dim", title="🎯 猜猜看",
     ))
-    _console.print("[dim]🔄 获取中...[/dim]")
+    with Live("[dim]🔄 获取中...[/dim]", console=_console, refresh_per_second=4, transient=True):
+        _target_done.wait(timeout=8)
 
     while len(guesses_with_hints) < max_guesses:
         remaining = max_guesses - len(guesses_with_hints)
@@ -378,8 +383,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             continue
 
         guessed_names.add(guess["name"])
-        guess_details = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], guess)))
-        guess_species = cast(dict[str, object] | None, fetch_species_data(guess["id"]))
+        with contextlib.redirect_stderr(io.StringIO()):
+            guess_details = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], guess)))
+            guess_species = cast(dict[str, object] | None, fetch_species_data(guess["id"]))
         if guess_species:
             guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
         _target_done.wait(timeout=8)
