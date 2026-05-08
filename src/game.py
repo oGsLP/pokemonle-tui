@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import random
+import threading
 import time
 from typing import cast
 
@@ -19,7 +20,7 @@ from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_CO
 from poketypes import ConfigDict, GuessRecord, HintRecord, PokemonEntry
 from data import get_pokemon_details, fetch_species_data, build_pokemon_index
 from config import load_config, save_config
-from comparison import compare_pokemon
+from comparison import compare_pokemon, compute_remaining_pool
 from fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
 from stats import save_game_stats, get_stats_summary
 from share import format_share_result
@@ -108,7 +109,7 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
 
     title = f"📋 猜测记录 (第 {len(guesses_with_hints)}/{max_guesses} 次"
     if pool_size:
-        title += f" | 池中 {pool_size} 只"
+        title += f" | 剩余 {pool_size} 只"
     title += ")"
 
     table = Table(
@@ -267,23 +268,28 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         return
 
     target = random.choice(pool)
-    # Defer PokeAPI enrichment to first comparison (avoids blocking game start)
+    # Start PokeAPI fetch in background immediately at game start
     target_details: PokemonEntry = cast(PokemonEntry, dict(target))
-    _target_enriched = False
+    _target_done = threading.Event()
+    _target_status: str = "loading"
 
-    def _ensure_target_details() -> None:
-        """Enrich target with PokeAPI data on first need."""
-        nonlocal target_details, _target_enriched
-        if _target_enriched:
-            return
-        enriched = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
-        species_data = cast(dict[str, object] | None, fetch_species_data(target["id"]))
-        if species_data:
-            enriched["egg_groups"] = cast(list[str], species_data.get("egg_groups", []))
-            cr = species_data.get("capture_rate")
-            enriched["capture_rate"] = int(cr) if cr is not None else 0
-        target_details = enriched
-        _target_enriched = True
+    def _fetch_target() -> None:
+        nonlocal target_details, _target_status
+        try:
+            enriched = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
+            species = cast(dict[str, object] | None, fetch_species_data(target["id"]))
+            if species:
+                enriched["egg_groups"] = cast(list[str], species.get("egg_groups", []))
+                cr = species.get("capture_rate")
+                enriched["capture_rate"] = int(cr) if cr is not None else 0
+            target_details = enriched
+            _target_status = "done"
+        except Exception:
+            _target_status = "error"
+        finally:
+            _target_done.set()
+
+    threading.Thread(target=_fetch_target, daemon=True).start()
 
     guesses_with_hints: list[GuessRecord] = []
     guessed_names: set[str] = set()
@@ -311,6 +317,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         ),
         border_style="dim", title="🎯 猜猜看",
     ))
+    _console.print("[dim]🔄 获取中...[/dim]")
 
     while len(guesses_with_hints) < max_guesses:
         remaining = max_guesses - len(guesses_with_hints)
@@ -375,7 +382,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         guess_species = cast(dict[str, object] | None, fetch_species_data(guess["id"]))
         if guess_species:
             guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
-        _ensure_target_details()
+        _target_done.wait(timeout=8)
         hints = list(compare_pokemon(target_details, guess_details, config))
 
         # 小恶作剧模式
@@ -389,7 +396,8 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
         guesses_with_hints.append((guess, hints))
         _console.print()
-        show_hints_table(guesses_with_hints, max_guesses, config, pool_size=total_pool_size)
+        show_hints_table(guesses_with_hints, max_guesses, config,
+                         pool_size=compute_remaining_pool(pool, guesses_with_hints, config))
 
         if guess["id"] == target["id"]:
             elapsed = time.time() - start_time

@@ -6,7 +6,7 @@ from typing import Callable, cast
 
 import constants
 from constants import GEN_MAP, Hint
-from poketypes import ConfigDict, PokemonData
+from poketypes import ConfigDict, GuessRecord, PokemonData
 
 GAME_MODE_PRESETS: dict[str, dict] = cast(dict[str, dict], constants.GAME_MODE_PRESETS)
 
@@ -157,3 +157,33 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict)
             hints.append(Hint("体型", "差不多", "partial"))
 
     return hints
+
+
+def compute_remaining_pool(
+    pool: list[PokemonData],
+    guesses_with_hints: list[GuessRecord],
+    config: ConfigDict,
+) -> int:
+    """Count pool members consistent with all revealed hints.
+
+    A candidate survives if, for every previous guess, comparing
+    guess → candidate produces the same hint levels as the actual
+    hints revealed to the player.
+    """
+    if not guesses_with_hints:
+        return len(pool)
+
+    surviving = 0
+    for candidate in pool:
+        consistent = True
+        for guess_poke, actual_hints in guesses_with_hints:
+            candidate_hints = compare_pokemon(guess_poke, candidate, config)
+            actual_levels = {h.label: h.level for h in actual_hints}
+            candidate_levels = {h.label: h.level for h in candidate_hints}
+            if actual_levels != candidate_levels:
+                consistent = False
+                break
+        if consistent:
+            surviving += 1
+
+    return surviving

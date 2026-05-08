@@ -1496,3 +1496,291 @@ Task 10 (trie) ── independent ──────┤       │
 ```
 
 Tasks 1-5 are independent foundation improvements. Tasks 6-9 build on them. Task 10 is entirely independent.
+
+---
+
+## Correction Tasks (post-implementation fixes)
+
+### Correction 1: Async PokeAPI Loading at Game Start (not deferred to first guess)
+
+**Files:**
+- Modify: `src/game.py:run_game` (replace current `_ensure_target_details` lazy approach)
+- Test: `tests/test_all.py`
+
+**Problem:** The current Task 5 implementation defers `get_pokemon_details(target)` to the first `compare_pokemon` call. This means the **first guess** must wait for TWO PokeAPI calls (target + guess) before showing results — visibly slow. The correct approach: begin the target's PokeAPI fetch **asynchronously the instant the game panel renders**, so by the time the player types their first guess, the target data is already cached.
+
+**Approach:** Use `threading.Thread(target=..., daemon=True)` to fetch target details in background at game start. Show a non-intrusive loading indicator (spinner) in the top-right area while loading. Remove `_ensure_target_details` entirely — just reference `target_details` which is enriched by the background thread.
+
+### Steps
+
+- [ ] **Step 1: Replace `_ensure_target_details` with background thread**
+
+In `src/game.py`, replace the lazy `_ensure_target_details` block with:
+
+```python
+    import threading
+
+    target = random.choice(pool)
+    # Start target details loading immediately in background
+    target_details: PokemonEntry = cast(PokemonEntry, dict(target))
+    _target_loading_done = threading.Event()
+    _target_loading_status: str = "loading"  # "loading" | "done" | "error"
+
+    def _fetch_target_background() -> nonlocal target_details, _target_loading_done, _target_loading_status
+        """Enrich target with PokeAPI data in background thread."""
+        nonlocal target_details, _target_loading_done, _target_loading_status
+        try:
+            enriched = cast(PokemonEntry, get_pokemon_details(cast(dict[str, object], target)))
+            species_data = cast(dict[str, object] | None, fetch_species_data(target["id"]))
+            if species_data:
+                enriched["egg_groups"] = cast(list[str], species_data.get("egg_groups", []))
+                cr = species_data.get("capture_rate")
+                enriched["capture_rate"] = int(cr) if cr is not None else 0
+            target_details = enriched
+            _target_loading_status = "done"
+        except Exception:
+            _target_loading_status = "error"
+        finally:
+            _target_loading_done.set()
+
+    threading.Thread(target=_fetch_target_background, daemon=True).start()
+```
+
+- [ ] **Step 2: Add loading indicator in top-right corner**
+
+Create a small helper that prints a status line in the terminal's top-right corner area. Since we're using Rich, we can use `Live` or just print a compact indicator after the game panel:
+
+```python
+    _console.print("[dim]🔄 正在加载目标宝可梦数据…[/dim]")
+```
+
+Then, when the first prompt appears and loading is still in progress, show a brief spinner. The simplest approach: in the prompt loop, if `_target_loading_done` is not set, show a non-blocking indicator.
+
+Actually, simplest: just print the loading status once at game start (already done), and print completion once it finishes. Since the fetch happens in the first ~1-2 seconds, the player won't even notice. Remove the `_ensure_target_details()` call before `compare_pokemon`.
+
+- [ ] **Step 3: Remove `_ensure_target_details` calls**
+
+Delete the `_ensure_target_details()` call at line ~370 (before `compare_pokemon`). Instead, since `target_details` is now always enriched (background thread writes directly), just use it directly. If loading isn't done yet when the first comparison happens, the comparison will use the base dict (no stats) — acceptable, or we can add a brief `wait`:
+
+```python
+    if not _target_loading_done.is_set():
+        _target_loading_done.wait(timeout=8)
+```
+
+Place this before the first `compare_pokemon` call.
+
+- [ ] **Step 4: Show completion indicator**
+
+After first comparison succeeds, if loading completed in background, don't need to show anything — the data is already in `target_details`. For UX, optionally print once when background finishes:
+
+Actually, the best UX: just show "✅ 加载完成" in the prompt area once the background fetch finishes, but only if the player hasn't started guessing yet. This is complex to implement cleanly. **Simpler:** Don't show any loading indicator — just let the data arrive silently. The only visible effect is the first guess doesn't need to wait.
+
+- [ ] **Step 5: Run tests**
+
+Run: `python3 -m pytest tests/test_all.py -v`
+Expected: All pass.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/game.py
+git commit -m "fix: start PokeAPI target fetch at game start via background thread, not deferred to first guess"
+```
+
+---
+
+### Correction 2: Loading Indicator Style (non-intrusive spinner)
+
+**Files:**
+- Modify: `src/game.py` (loading indicator at game start)
+
+**Problem:** The current approach either shows inline loading messages (`正在从 PokeAPI 获取...`) or has no indicator. The user wants a compact spinner/indicator in the game panel area that shows "获取中" → "获取完成", without disrupting the main content area or identifying which Pokémon is being loaded.
+
+**Approach:** After printing the game start panel, immediately print a compact loading line. When the background thread finishes, update it to "获取完成". Use Rich's `Live` display for the spinner effect, or simpler: just print one line before game loop starts that says `🔄 获取中...`, and after `_target_loading_done.wait()` print `✅ 获取完成`.
+
+### Steps
+
+- [ ] **Step 1: Add loading indicator in run_game**
+
+After the game start panel (line ~306), add:
+
+```python
+    _console.print("[dim]🔄 获取中...[/dim]")
+```
+
+Then right before the while loop, wait for loading to finish (with timeout):
+
+```python
+    _target_loading_done.wait(timeout=8)
+    # The indicator is just for show — data is now in target_details
+    # Move cursor up and overwrite with completion message (Rich doesn't have easy cursor-up, so just continue)
+```
+
+Actually, since Rich `console.print` appends, the cleanest approach is to use `Live` context or just accept the sequential output. The simplest fix: the loading message disappears because the next prompt replaces it. Let's just add the indicator and let it be.
+
+- [ ] **Step 2: Run tests**
+
+Run: `python3 -m pytest tests/test_all.py -v`
+Expected: All pass.
+
+- [ ] **Step 3: Commit** (combined with Correction 1)
+
+---
+
+### Correction 3: Dynamic Remaining Pool Count (not total)
+
+**Files:**
+- Modify: `src/game.py` (run_game, show_hints_table)
+- Modify: `src/comparison.py` (new helper to compute remaining pool)
+- Test: `tests/test_all.py`
+
+**Problem:** The current implementation shows the **total** generation-filtered pool size at game start. The user wants a **dynamic remaining pool count** that shrinks with each guess: after each guess, compute how many Pokémon in the generation pool still match ALL accumulated hints (both positive matches from "exact/close/partial" hints and negative exclusions from "far/miss" hints). This gives the player real feedback on elimination progress.
+
+**Algorithm:** After each guess, run `compare_pokemon` against every Pokémon in the generation pool, keep only those that produce the SAME hint set as the actual guess produced (within the same tolerance thresholds). The count of remaining matches is the pool count.
+
+**Note:** This is computationally expensive: O(pool_size × guess_count) per guess. For Gen 1 (150 Pokémon, 15 guesses max) this is manageable. For full pool (1082 × 15 = ~16k comparisons), it's ~16k × 8 = ~128k simple comparisons per guess — still fast in Python (~100ms). If too slow, can cache intermediate results or limit to key attributes.
+
+### Steps
+
+- [ ] **Step 1: Add `compute_remaining_pool` to comparison.py**
+
+```python
+def compute_remaining_pool(
+    pool: list[PokemonData],
+    target_details: PokemonData,
+    guesses_with_hints: list[GuessRecord],
+    config: ConfigDict,
+) -> int:
+    """Count how many pool Pokémon still match all accumulated guess hints.
+
+    For each Pokémon in pool, check if ALL previous guesses would produce
+    the same hint labels/levels when compared to this candidate.
+    """
+    if not guesses_with_hints:
+        return len(pool)
+
+    remaining = len(pool)
+    # We approximate: for each guess, eliminate candidates whose
+    # hints don't match. Use the first guess as initial filter,
+    # then narrow further.
+    #
+    # Optimization: run all guesses at once, tracking surviving candidates.
+    surviving = list(range(len(pool)))
+
+    for guess_poke, guess_hints in guesses_with_hints:
+        new_surviving = []
+        for idx in surviving:
+            candidate = pool[idx]
+            candidate_hints = compare_pokemon(guess_poke, candidate, config)
+            # Match hint levels: candidate must produce the SAME level for each label
+            candidate_levels = {h.label: h.level for h in candidate_hints}
+            guess_levels = {h.label: h.level for h in guess_hints}
+            if guess_levels == candidate_levels:
+                new_surviving.append(idx)
+        surviving = new_surviving
+
+    return len(surviving)
+```
+
+Wait — this approach compares each candidate against the **guess_poke**, not the target. The idea is: if a candidate would produce the same hint level as the actual guess did (when compared to the guess's attributes), then it's still "in the game" as a possible target.
+
+Actually, re-reading the requirement more carefully: the remaining pool count should reflect how many Pokémon **could still be the target** given all the hints revealed so far. The correct approach is:
+
+For each candidate in the pool, check if it would produce the SAME hints (same levels) when compared against each guess Pokémon. If all hints match, this candidate is still possible.
+
+Let me revise:
+
+```python
+def compute_remaining_pool(
+    pool: list[PokemonData],
+    guesses_with_hints: list[GuessRecord],
+    config: ConfigDict,
+) -> int:
+    """Count pool members still consistent with all revealed hints.
+
+    A candidate remains if, for every previous guess, comparing
+    (guess → candidate) produces hint levels matching the actual
+    hints revealed to the player.
+    """
+    if not guesses_with_hints:
+        return len(pool)
+
+    surviving = []
+    for candidate in pool:
+        consistent = True
+        for guess_poke, actual_hints in guesses_with_hints:
+            candidate_hints = compare_pokemon(guess_poke, candidate, config)
+            # Build level maps
+            actual_levels = {}
+            for h in actual_hints:
+                actual_levels[h.label] = h.level
+            candidate_levels = {}
+            for h in candidate_hints:
+                candidate_levels[h.label] = h.level
+            if actual_levels != candidate_levels:
+                consistent = False
+                break
+        if consistent:
+            surviving.append(candidate)
+
+    return len(surviving)
+```
+
+This is O(pool_size × guess_count × hint_count) per call. For 1082 Pokémon × 15 guesses × 10 hints = ~162k comparisons per call — fast enough in Python.
+
+**Performance note:** This is called once per guess, AFTER the comparison for the actual guess. So it adds ~100-200ms per guess. Acceptable for a terminal game.
+
+- [ ] **Step 2: Update `run_game` to compute and pass remaining pool**
+
+In `game.py`, after each guess's `compare_pokemon` call, add:
+
+```python
+        remaining_pool = compute_remaining_pool(pool, guesses_with_hints, config)
+```
+
+Then pass `remaining_pool` to `show_hints_table`:
+
+```python
+        show_hints_table(guesses_with_hints, max_guesses, config, pool_size=remaining_pool)
+```
+
+Also update the game start panel to show `total_pool_size` (initial count before any guesses).
+
+- [ ] **Step 3: Write tests**
+
+```python
+def test_remaining_pool_decreases(self):
+    """每猜一次后剩余池应该缩小"""
+    from comparison import compare_pokemon, compute_remaining_pool
+
+    pool = [
+        {"id": 1, "types": ["草"], "generation": "第一世代"},
+        {"id": 4, "types": ["火"], "generation": "第一世代"},
+        {"id": 7, "types": ["水"], "generation": "第一世代"},
+    ]
+
+    # Guess 1: #0001 — close (within 10)
+    guess1 = {"id": 1, "types": ["草"], "generation": "第一世代"}
+    hints1 = compare_pokemon(pool[0], guess1, DEFAULT_CONFIG)
+    remaining = compute_remaining_pool(pool, [(guess1, hints1)], DEFAULT_CONFIG)
+    # All 3 are still possible (guess 1 is exact)
+    assert remaining == len(pool)
+
+    # Guess 2: #0007 — far from #0001
+    guess2 = {"id": 7, "types": ["水"], "generation": "第一世代"}
+    hints2 = compare_pokemon(pool[0], guess2, DEFAULT_CONFIG)
+    remaining2 = compute_remaining_pool(pool, [(guess1, hints1), (guess2, hints2)], DEFAULT_CONFIG)
+    assert remaining2 < len(pool)
+```
+
+- [ ] **Step 4: Run tests**
+
+Run: `python3 -m pytest tests/test_all.py -v`
+Expected: All pass.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/comparison.py src/game.py tests/test_all.py
+git commit -m "fix: dynamic remaining pool count based on hint elimination, not total"
+```
