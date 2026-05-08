@@ -21,6 +21,7 @@ from config import load_config, save_config
 from comparison import compare_pokemon
 from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon
 from stats import save_game_stats, get_stats_summary, _load_stats
+import ascii_art
 
 
 # ══════════════════════════════════════════════
@@ -546,3 +547,65 @@ class TestStats:
         assert "宝可梦池" in summary
         assert "1082" in summary
         assert "胜率" in summary
+
+
+# ══════════════════════════════════════════════
+#  Test: ascii_art.py (term-image 精灵图展示)
+# ══════════════════════════════════════════════
+
+class TestAsciiArt:
+    """测试精灵图下载、缓存和 term-image 展示"""
+
+    # ── _download_sprite ──
+
+    def test_download_sprite_cache_hit(self):
+        """缓存的精灵图应直接返回路径"""
+        path = ascii_art._download_sprite(152)
+        assert path is not None
+        assert isinstance(path, str)
+        assert os.path.exists(path)
+        assert path.endswith(".png")
+
+    def test_download_sprite_not_found(self):
+        """不存在的精灵图 ID → None"""
+        # 使用超大 ID，缓存中不存在且 PokeAPI 也没有
+        path = ascii_art._download_sprite(99999)
+        assert path is None
+
+    # ── get_sprite_path (公开接口) ──
+
+    def test_get_sprite_path_has_cache(self):
+        """缓存中有精灵图的宝可梦"""
+        ascii_art._cache.pop("Chikorita", None)
+        path = ascii_art.get_sprite_path("Chikorita", 152)
+        assert path is not None
+        assert os.path.exists(path)
+
+    def test_get_sprite_path_cache_hit(self):
+        """第二次调用应命中内存缓存"""
+        ascii_art._cache.pop("Chikorita", None)
+        path1 = ascii_art.get_sprite_path("Chikorita", 152)
+        path2 = ascii_art.get_sprite_path("Chikorita", 152)
+        assert path1 == path2
+
+    def test_get_sprite_path_nonexistent(self):
+        """不存在的宝可梦 → None"""
+        path = ascii_art.get_sprite_path("NonExistentPokemon")
+        assert path is None
+
+    # ── show_sprite (终端展示) ──
+
+    @pytest.mark.skipif(not ascii_art._HAS_TERM_IMAGE, reason="term-image 未安装")
+    def test_show_sprite_from_cache(self):
+        """从缓存的精灵图展示"""
+        sprite_path = os.path.join(ascii_art._SPRITE_CACHE_DIR, "152.png")
+        if not os.path.exists(sprite_path):
+            pytest.skip("Sprite cache 152.png 不存在")
+        result = ascii_art.show_sprite("Chikorita", 152)
+        assert result is True
+
+    @pytest.mark.skipif(not ascii_art._HAS_TERM_IMAGE, reason="term-image 未安装")
+    def test_show_sprite_nonexistent(self):
+        """不存在的宝可梦 → False"""
+        result = ascii_art.show_sprite("NonExistentPokemon")
+        assert result is False
