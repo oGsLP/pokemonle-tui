@@ -18,6 +18,28 @@ CACHE_DIR: str = os.path.join(PROJECT_DIR, ".pokeapi_cache")
 STATS_FILE: str = os.path.join(PROJECT_DIR, ".game_stats.json")
 CONFIG_FILE: str = os.path.join(PROJECT_DIR, ".game_config.json")
 
+# ── 属性中文→英文映射 ──
+TYPE_CN_TO_EN_MAP: Dict[str, str] = {
+    "一般": "normal",
+    "火": "fire",
+    "水": "water",
+    "草": "grass",
+    "电": "electric",
+    "冰": "ice",
+    "格斗": "fighting",
+    "毒": "poison",
+    "地面": "ground",
+    "飞行": "flying",
+    "超能力": "psychic",
+    "虫": "bug",
+    "岩石": "rock",
+    "幽灵": "ghost",
+    "龙": "dragon",
+    "恶": "dark",
+    "钢": "steel",
+    "妖精": "fairy",
+}
+
 # ── 属性颜色 (ANSI hex) ──
 TYPE_COLORS: Dict[str, str] = {
     "normal": "#A8A878", "fire": "#F08030", "water": "#6890F0",
@@ -27,9 +49,6 @@ TYPE_COLORS: Dict[str, str] = {
     "rock": "#B8A038", "ghost": "#705898", "dragon": "#7038F8",
     "dark": "#705848", "steel": "#B8B8D0", "fairy": "#EE99AC",
 }
-
-# ── 形态关键词列表（用于识别地区形态） ──
-FORM_INDICATORS: List[str] = ["-", "的样子", "alola", "galar", "paldea", "hisui"]
 
 # ── 世代名称 → (缩写, 序号) ──
 GEN_MAP: Dict[str, Tuple[str, int]] = {

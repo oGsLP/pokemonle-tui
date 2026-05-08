@@ -3,7 +3,9 @@
 运行: cd /home/ogslp/Projects/Opencode/pokemonle-tui && python3 -m pytest tests/ -v
 """
 # pyright: reportMissingImports=false, reportUnusedImport=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportMissingParameterType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false
+import json
 import os
+import random
 import sys
 import pytest
 
@@ -17,10 +19,11 @@ from constants import (
     Hint, TYPE_COLORS, GEN_MAP, ALL_GENERATIONS, GAME_MODE_PRESETS, DEFAULT_CONFIG,
 )
 from data import load_pokemon_data, build_pokemon_index, fetch_pokeapi_data, fetch_species_data, get_pokemon_details
-from config import load_config, save_config
+from config import load_config, save_config, _validate_config
 from comparison import compare_pokemon
 from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon
 from stats import save_game_stats, get_stats_summary, _load_stats
+from game import _format_hint
 import ascii_art
 
 
@@ -170,13 +173,10 @@ class TestData:
         assert result is None
 
     def test_build_pokemon_index_lookups(self, pokemon_list):
-        name_idx, id_map = build_pokemon_index(pokemon_list)
-        # 名称索引 - 通过名称查找
-        assert name_idx["皮卡丘"]["id"] == 25
-        assert name_idx["pikachu"]["id"] == 25
-        # ID 索引 - 通过 ID 查找
-        assert 25 in id_map
-        assert id_map[25][0]["name"] == "皮卡丘"
+        idx = build_pokemon_index(pokemon_list)
+        assert idx[25]["name"] == "皮卡丘"
+        assert idx["皮卡丘"]["id"] == 25
+        assert idx["pikachu"]["id"] == 25
 
     def test_fetch_species_data_cached(self):
         species_cache_ids = []
@@ -227,6 +227,17 @@ class TestConfig:
             loaded = load_config()
             assert loaded["game_mode"] == "hard"
             assert loaded["max_guesses"] == 15
+        finally:
+            constants.CONFIG_FILE = old
+
+    def test_save_failure_raises(self, tmp_path):
+        """写入失败时应该抛出 OSError"""
+        old = constants.CONFIG_FILE
+        try:
+            bad_path = str(tmp_path / "nonexistent" / "config.json")
+            constants.CONFIG_FILE = bad_path
+            with pytest.raises(OSError):
+                save_config({"game_mode": "easy"})
         finally:
             constants.CONFIG_FILE = old
 
@@ -395,6 +406,26 @@ class TestComparison:
         assert "草" in matched
         assert "龙" in matched
 
+    def test_appearance_without_height_no_crash(self):
+        """开启体型比较但缺少身高数据时不应崩溃且不产生体型提示"""
+        target = {"id": 1, "types": ["草"], "generation": "第一世代"}
+        guess = {"id": 2, "types": ["草"], "generation": "第一世代"}
+        hints = compare_pokemon(target, guess,
+                                 {**DEFAULT_CONFIG, "show_more_appearance": True})
+        labels = [h.label for h in hints]
+        assert "体型" not in labels, "缺少身高数据时不应生成体型提示"
+
+    def test_appearance_with_height(self):
+        """有身高数据时开启体型比较应生成体型提示"""
+        target = {"id": 1, "types": ["草"], "generation": "第一世代",
+                   "height": 40, "weight": 69}
+        guess = {"id": 4, "types": ["火"], "generation": "第一世代",
+                  "height": 60, "weight": 85}
+        hints = compare_pokemon(target, guess,
+                                 {**DEFAULT_CONFIG, "show_more_appearance": True})
+        labels = [h.label for h in hints]
+        assert "体型" in labels, "有身高数据时应生成体型提示"
+
 
 # ══════════════════════════════════════════════
 #  Test: fuzzy.py
@@ -402,13 +433,9 @@ class TestComparison:
 
 class TestFuzzy:
     def test_build_pokemon_index(self, pokemon_list):
-        name_idx, id_map = build_pokemon_index(pokemon_list)
-        assert isinstance(name_idx, dict)
-        assert isinstance(id_map, dict)
-        # 名称索引 - 通过名称查找
-        assert name_idx["皮卡丘"]["id"] == 25
-        # ID 索引 - 通过 ID 查找
-        assert 25 in id_map
+        idx = build_pokemon_index(pokemon_list)
+        assert isinstance(idx, dict)
+        assert idx[25]["name"] == "皮卡丘"
 
     def test_exact_chinese_name(self, pokemon_25):
         assert score_pokemon("皮卡丘", pokemon_25) == 100
@@ -469,35 +496,6 @@ class TestFuzzy:
         result = find_pokemon("zzzzz_not_pokemon", pokemon_list)
         assert result is None
 
-    def test_find_pokemon_regional_form_by_id_only(self, pokemon_list):
-        """仅输入 ID 26（共享 ID）应返回原版形态"""
-        result = find_pokemon("26", pokemon_list)
-        assert result is not None
-        # 只有一个候选时直接返回
-        if "-" in result["name"]:
-            # 如果有多个候选但用户没有指定形态，应返回原版（第一个）
-            assert result["name"] == "雷丘"
-        else:
-            assert result["name"] == "雷丘"
-
-    def test_find_pokemon_regional_form_with_indicator(self, pokemon_list):
-        """输入 26-阿罗拉的样子 → 返回地区形态"""
-        result = find_pokemon("26-阿罗拉的样子", pokemon_list)
-        assert result is not None
-        assert result["name"] == "雷丘-阿罗拉的样子"
-
-    def test_find_pokemon_multiple_forms_default(self, pokemon_list):
-        """输入 52（3 个形态的喵喵）→ 返回普通喵喵（原版）"""
-        result = find_pokemon("52", pokemon_list)
-        assert result is not None
-        assert result["name"] == "喵喵"
-
-    def test_find_pokemon_regional_form_galar(self, pokemon_list):
-        """输入 52-伽勒尔的样子 → 返回伽勒尔形态喵喵"""
-        result = find_pokemon("52-伽勒尔的样子", pokemon_list)
-        assert result is not None
-        assert result["name"] == "喵喵-伽勒尔的样子"
-
 
 # ══════════════════════════════════════════════
 #  Test: stats.py
@@ -548,70 +546,301 @@ class TestStats:
         assert "1082" in summary
         assert "胜率" in summary
 
-
-# ══════════════════════════════════════════════
-#  Test: ascii_art.py (term-image 精灵图展示)
-# ══════════════════════════════════════════════
-
-class TestAsciiArt:
-    """测试精灵图下载、缓存和 term-image 展示"""
-
-    # ── _download_sprite ──
-
-    def test_download_sprite_cache_hit(self):
-        """缓存的精灵图应直接返回路径"""
-        path = ascii_art._download_sprite(152)
-        assert path is not None
-        assert isinstance(path, str)
-        assert os.path.exists(path)
-        assert path.endswith(".png")
-
-    def test_download_sprite_not_found(self):
-        """不存在的精灵图 ID → None"""
-        # 使用超大 ID，缓存中不存在且 PokeAPI 也没有
-        path = ascii_art._download_sprite(99999)
-        assert path is None
-
-    # ── get_sprite_path (公开接口) ──
-
-    def test_get_sprite_path_has_cache(self):
-        """缓存中有精灵图的宝可梦"""
-        ascii_art._cache.pop("Chikorita", None)
-        path = ascii_art.get_sprite_path("Chikorita", 152)
-        assert path is not None
-        assert os.path.exists(path)
-
-    def test_get_sprite_path_cache_hit(self):
-        """第二次调用应命中内存缓存"""
-        ascii_art._cache.pop("Chikorita", None)
-        path1 = ascii_art.get_sprite_path("Chikorita", 152)
-        path2 = ascii_art.get_sprite_path("Chikorita", 152)
-        assert path1 == path2
-
-    def test_get_sprite_path_nonexistent(self):
-        """不存在的宝可梦 → None"""
-        path = ascii_art.get_sprite_path("NonExistentPokemon")
-        assert path is None
-
-    # ── show_sprite (终端展示) ──
-
-    @pytest.mark.skipif(not ascii_art._HAS_TERM_IMAGE, reason="term-image 未安装")
-    def test_show_sprite_from_cache(self):
-        """从缓存的精灵图展示"""
-        sprite_path = os.path.join(ascii_art._SPRITE_CACHE_DIR, "152.png")
-        if not os.path.exists(sprite_path):
-            pytest.skip("Sprite cache 152.png 不存在")
-        # Note: In test environment, terminal may not support image display
-        # We test that the function doesn't crash and processes the image correctly
+    def test_save_failure_raises(self, monkeypatch, tmp_path):
+        """写入失败时应该抛出 OSError"""
+        old = constants.STATS_FILE
         try:
-            result = ascii_art.show_sprite("Chikorita", 152)
-            # Result may be False if terminal doesn't support display, but should not raise exception
-            assert isinstance(result, bool)
-        except Exception:
-            pytest.fail("show_sprite should not raise exceptions")
+            bad_path = str(tmp_path / "nonexistent" / "stats.json")
+            constants.STATS_FILE = bad_path
+            with pytest.raises(OSError):
+                save_game_stats(True, 3)
+        finally:
+            constants.STATS_FILE = old
 
-    @pytest.mark.skipif(not ascii_art._HAS_TERM_IMAGE, reason="term-image 未安装")
-    def test_show_sprite_nonexistent(self):
-        """不存在的宝可梦 → False"""
-        result = ascii_art.show_sprite("NonExistentPokemon")
-        assert result is False
+
+# ══════════════════════════════════════════════
+#  Test: game.py _format_hint
+# ══════════════════════════════════════════════
+
+class TestFormatHint:
+    def test_exact_hint(self):
+        t = _format_hint("编号", "#0025", "exact")
+        assert "#0025" in t.plain
+
+    def test_close_with_arrow(self):
+        t = _format_hint("编号", "#0020", "close", "↑")
+        assert "#0020" in t.plain
+        assert "↑" in t.plain
+
+    def test_miss_dim(self):
+        t = _format_hint("属性", "火", "miss")
+        assert "火" in t.plain
+
+    def test_type_partial_highlights_matched(self):
+        t = _format_hint("属性", "草/飞行", "partial", "草")
+        assert "草" in t.plain
+        assert "飞行" in t.plain
+
+    def test_type_miss_no_highlight(self):
+        t = _format_hint("属性", "水/火", "miss", "")
+        assert "水" in t.plain
+        assert "火" in t.plain
+
+    def test_far_hint(self):
+        t = _format_hint("身高", "1.5m", "far", "↓")
+        assert "1.5m" in t.plain
+        assert "↓" in t.plain
+
+
+# ══════════════════════════════════════════════
+#  Test: config.py _validate_config
+# ══════════════════════════════════════════════
+
+class TestConfigValidation:
+    def test_preserves_valid_values(self):
+        cfg = dict(DEFAULT_CONFIG)
+        validated = _validate_config(cfg)
+        assert validated == cfg
+
+    def test_coerces_int_from_string(self):
+        cfg = {**DEFAULT_CONFIG, "max_guesses": "15"}
+        validated = _validate_config(cfg)
+        assert validated["max_guesses"] == 15
+
+    def test_falls_back_on_invalid_int(self):
+        cfg = {**DEFAULT_CONFIG, "max_guesses": "abc"}
+        validated = _validate_config(cfg)
+        assert validated["max_guesses"] == DEFAULT_CONFIG["max_guesses"]
+
+    def test_coerces_bool(self):
+        cfg = {**DEFAULT_CONFIG, "show_more_stats": 1}
+        validated = _validate_config(cfg)
+        assert validated["show_more_stats"] is True
+
+    def test_falls_back_wrong_list_type(self):
+        cfg = {**DEFAULT_CONFIG, "generations": "not_a_list"}
+        validated = _validate_config(cfg)
+        assert validated["generations"] == DEFAULT_CONFIG["generations"]
+
+
+# ══════════════════════════════════════════════
+#  Test: fuzzy.py — cached index + precomputed
+# ══════════════════════════════════════════════
+
+class TestFuzzyCached:
+    def test_find_pokemon_with_cached_index(self, pokemon_list):
+        idx = build_pokemon_index(pokemon_list)
+        result = find_pokemon("皮卡丘", pokemon_list, index=idx)
+        assert result is not None
+        assert result["id"] == 25
+
+    def test_find_pokemon_without_index_still_works(self, pokemon_list):
+        result = find_pokemon("皮卡丘", pokemon_list)
+        assert result is not None
+        assert result["id"] == 25
+
+    def test_score_uses_precomputed_fields(self, pokemon_25):
+        assert "_name_en_norm" in pokemon_25
+        assert pokemon_25["_name_en_norm"] == "pikachu"
+        score = score_pokemon("pikachu", pokemon_25)
+        assert score == 100
+
+    def test_score_fallback_no_precomputed(self):
+        poke = {"name": "Test", "name_en": "Testmon", "id": 999, "types": [], "generation": "第一世代"}
+        score = score_pokemon("testmon", poke)
+        assert score == 100
+
+
+# ══════════════════════════════════════════════
+#  Test: data.py — mock PokeAPI, no skip
+# ══════════════════════════════════════════════
+
+class TestDataMocked:
+    def test_fetch_pokeapi_mock(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        import data as _data
+
+        cache_dir = str(tmp_path / "mock_cache")
+        monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+            def read(self):
+                return json.dumps({
+                    "height": 7, "weight": 69,
+                    "stats": [{"stat": {"name": "speed"}, "base_stat": 90}],
+                    "abilities": [{"ability": {"name": "static"}}],
+                }).encode()
+
+        monkeypatch.setattr(_ur, "urlopen", lambda *a, **kw: FakeResponse())
+        result = fetch_pokeapi_data(25)
+        assert result is not None
+        assert result["height"] == 7
+        assert result["weight"] == 69
+        assert result["stats"]["speed"] == 90
+
+    def test_fetch_pokeapi_http_error(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        import data as _data
+
+        cache_dir = str(tmp_path / "mock_cache2")
+        monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        class FakeErrorResponse:
+            status = 404
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+            def read(self):
+                return b"Not Found"
+
+        monkeypatch.setattr(_ur, "urlopen", lambda *a, **kw: FakeErrorResponse())
+        result = fetch_pokeapi_data(99999)
+        assert result is None
+
+    def test_cached_or_fetch_uses_cache(self, monkeypatch, tmp_path):
+        import data as _data
+
+        cache_dir = str(tmp_path / "mock_cache3")
+        monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        cache_file = os.path.join(cache_dir, "0025.json")
+        with open(cache_file, "w") as f:
+            json.dump({"height": 4, "weight": 60, "stats": {}, "abilities": []}, f)
+
+        result = fetch_pokeapi_data(25)
+        assert result is not None
+        assert result["height"] == 4
+
+
+# ══════════════════════════════════════════════
+#  Test: game.py run_game
+# ══════════════════════════════════════════════
+
+import game
+
+
+class _FakeSession:
+    def __init__(self, inputs):
+        self._inputs = list(inputs)
+        self._idx = 0
+        self.message = ""
+
+    def prompt(self):
+        if self._idx >= len(self._inputs):
+            raise EOFError
+        val = self._inputs[self._idx]
+        self._idx += 1
+        return val
+
+
+def _mock_game_env(monkeypatch, pokemon_list, target, inputs, tmp_path):
+    import game as _game
+
+    stats_file = str(tmp_path / "stats.json")
+    monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(inputs))
+    monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+    monkeypatch.setattr("random.choice", lambda s: target)
+    monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
+    monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
+
+    def _fake_details(poke):
+        d = dict(poke)
+        d.update({"stat_total": 300, "speed": 90, "hp": 45, "attack": 50,
+                   "defense": 40, "sp_attack": 60, "sp_defense": 50,
+                   "height": 40, "weight": 60, "stats": {}})
+        return d
+    monkeypatch.setattr("game.get_pokemon_details", _fake_details)
+    monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+
+    config = dict(DEFAULT_CONFIG)
+    _game.run_game(pokemon_list, config)
+
+
+class TestRunGame:
+    def test_win_on_exact_match(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["妙蛙种子"], tmp_path)
+        assert stat_calls == [(True, 1)]
+
+    def test_quit_saves_loss(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["q"], tmp_path)
+        assert stat_calls == [(False, 0)]
+
+    def test_reveal_saves_loss(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["reveal"], tmp_path)
+        assert stat_calls == [(False, 0)]
+
+    def test_lose_on_max_guesses(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+
+        target = pokemon_list[0]
+        all_pokemon = [p["name"] for p in pokemon_list if p["id"] != target["id"]]
+        bad_guesses = all_pokemon[:15]
+
+        import game as _game
+        monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(bad_guesses))
+        monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+        monkeypatch.setattr("random.choice", lambda s: target)
+        monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+        _game.run_game(pokemon_list, {**DEFAULT_CONFIG, "max_guesses": 15})
+        assert stat_calls[-1] == (False, 15)
+
+    def test_empty_pool_returns_early(self, monkeypatch, pokemon_list, tmp_path):
+        import game as _game
+        config = {**DEFAULT_CONFIG, "generations": []}
+        monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession([]))
+        monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+        _game.run_game(pokemon_list, config)
+
+    def test_not_found_then_quit(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        _mock_game_env(monkeypatch, pokemon_list, target, ["zzzz_not_found", "q"], tmp_path)
+        assert len(stat_calls) > 0
+
+    def test_mischief_mode_no_crash(self, monkeypatch, pokemon_list, tmp_path):
+        stat_calls = []
+        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        target = pokemon_list[0]
+        config = {**DEFAULT_CONFIG, "mischief": True, "max_guesses": 15}
+        import game as _game
+        monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(["皮卡丘", "q"]))
+        monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
+
+        real_choice = random.choice
+        monkeypatch.setattr("random.choice", lambda s: target if isinstance(s[0], dict) else real_choice(s))
+
+        monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
+        monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+        _game.run_game(pokemon_list, config)

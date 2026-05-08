@@ -1,20 +1,38 @@
 """
-比较逻辑 — 目标宝可梦和猜测宝可梦之间的对比，生成提示列表
-"""
+ 比较逻辑 — 目标宝可梦和猜测宝可梦之间的对比，生成提示列表
+ """
 
-from typing import cast
+from typing import Callable, cast
 
 import constants
 from constants import GEN_MAP, Hint
+from poketypes import ConfigDict, GuessRecord, PokemonData
 
-PokemonData = dict[str, object]
-ConfigData = dict[str, object]
-ModePreset = dict[str, int]
-GameModePresets = dict[str, ModePreset]
-GAME_MODE_PRESETS: GameModePresets = cast(GameModePresets, constants.GAME_MODE_PRESETS)
+GAME_MODE_PRESETS: dict[str, dict] = cast(dict[str, dict], constants.GAME_MODE_PRESETS)
 
 
-def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigData) -> list[Hint]:
+def _compare_stat(
+    target_val: int,
+    guess_val: int,
+    label: str,
+    guess_display: str,
+    range_key: str,
+    preset: dict[str, int],
+    *,
+    formatter: Callable[[int], str] | None = None,
+) -> Hint:
+    diff = target_val - guess_val
+    arrow = "↑" if diff > 0 else "↓"
+    display = formatter(guess_val) if formatter else guess_display
+    if diff == 0:
+        return Hint(label, display, "exact")
+    elif abs(diff) <= preset[range_key]:
+        return Hint(label, display, "close", arrow)
+    else:
+        return Hint(label, display, "far", arrow)
+
+
+def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict) -> list[Hint]:
     """
     比较目标宝可梦和猜测宝可梦，返回提示列表。
     每个提示格式: (标签, 值, 等级, [箭头])
@@ -27,15 +45,12 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigData)
     preset = GAME_MODE_PRESETS.get(mode, GAME_MODE_PRESETS["normal"])
 
     # ── 编号 ──
-    target_id = cast(int, target["id"])
-    guess_id = cast(int, guess["id"])
-    diff = target_id - guess_id
-    if diff == 0:
-        hints.append(Hint("编号", f"#{target_id:04d}", "exact"))
-    elif abs(diff) <= preset["id_range"]:
-        hints.append(Hint("编号", f"#{guess_id:04d}", "close", "↑" if diff > 0 else "↓"))
-    else:
-        hints.append(Hint("编号", f"#{guess_id:04d}", "far", "↑" if diff > 0 else "↓"))
+    hints.append(_compare_stat(
+        cast(int, target["id"]),
+        cast(int, guess["id"]),
+        "编号", f"#{cast(int, guess['id']):04d}", "id_range", preset,
+        formatter=lambda v: f"#{v:04d}",
+    ))
 
     # ── 属性 ──
     target_types = cast(list[str], target["types"])
@@ -85,87 +100,93 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigData)
 
     # ── 种族值总和 ──
     if "stat_total" in target and "stat_total" in guess:
-        target_stat_total = cast(int, target["stat_total"])
-        guess_stat_total = cast(int, guess["stat_total"])
-        diff_st = target_stat_total - guess_stat_total
-        arrow = "↑" if diff_st > 0 else "↓"
-        if diff_st == 0:
-            hints.append(Hint("种族值", str(guess_stat_total), "exact"))
-        elif abs(diff_st) <= preset["stat_range"]:
-            hints.append(Hint("种族值", str(guess_stat_total), "close", arrow))
-        else:
-            hints.append(Hint("种族值", str(guess_stat_total), "far", arrow))
+        hints.append(_compare_stat(
+            cast(int, target["stat_total"]),
+            cast(int, guess["stat_total"]),
+            "种族值", str(cast(int, guess["stat_total"])), "stat_range", preset,
+        ))
 
     # ── 速度 ──
     if "speed" in target and "speed" in guess:
-        target_speed = cast(int, target["speed"])
-        guess_speed = cast(int, guess["speed"])
-        diff_sp = target_speed - guess_speed
-        arrow = "↑" if diff_sp > 0 else "↓"
-        if diff_sp == 0:
-            hints.append(Hint("速度", str(guess_speed), "exact"))
-        elif abs(diff_sp) <= preset["speed_range"]:
-            hints.append(Hint("速度", str(guess_speed), "close", arrow))
-        else:
-            hints.append(Hint("速度", str(guess_speed), "far", arrow))
+        hints.append(_compare_stat(
+            cast(int, target["speed"]),
+            cast(int, guess["speed"]),
+            "速度", str(cast(int, guess["speed"])), "speed_range", preset,
+        ))
 
     # ── 更多种族值 (HP/攻击/防御/特攻/特防) ──
     if config.get("show_more_stats"):
         for stat_key, stat_cn in [("hp", "HP"), ("attack", "攻击"), ("defense", "防御"),
                                   ("sp_attack", "特攻"), ("sp_defense", "特防")]:
             if stat_key in target and stat_key in guess:
-                target_stat = cast(int, target[stat_key])
-                guess_stat = cast(int, guess[stat_key])
-                diff_v = target_stat - guess_stat
-                arrow = "↑" if diff_v > 0 else "↓"
-                if diff_v == 0:
-                    hints.append(Hint(stat_cn, str(guess_stat), "exact"))
-                elif abs(diff_v) <= preset["detail_range"]:
-                    hints.append(Hint(stat_cn, str(guess_stat), "close", arrow))
-                else:
-                    hints.append(Hint(stat_cn, str(guess_stat), "far", arrow))
+                hints.append(_compare_stat(
+                    cast(int, target[stat_key]),
+                    cast(int, guess[stat_key]),
+                    stat_cn, str(cast(int, guess[stat_key])), "detail_range", preset,
+                ))
 
     # ── 身高 ──
-    if "height" in target and "height" in guess:
-        target_height = cast(int, target["height"])
-        guess_height = cast(int, guess["height"])
-        diff_h = target_height - guess_height
-        arrow = "↑" if diff_h > 0 else "↓"
-        h1 = target_height / 10
-        h2 = guess_height / 10
-        if diff_h == 0:
-            hints.append(Hint("身高", f"{h1:.1f}m", "exact"))
-        elif abs(diff_h) <= preset["height_range"]:
-            hints.append(Hint("身高", f"{h2:.1f}m", "close", arrow))
-        else:
-            hints.append(Hint("身高", f"{h2:.1f}m", "far", arrow))
+    height_available = "height" in target and "height" in guess
+    if height_available:
+        hints.append(_compare_stat(
+            cast(int, target["height"]),
+            cast(int, guess["height"]),
+            "身高", f"{cast(int, guess['height']) / 10:.1f}m", "height_range", preset,
+            formatter=lambda v: f"{v / 10:.1f}m",
+        ))
 
     # ── 体重 ──
     if "weight" in target and "weight" in guess:
-        target_weight = cast(int, target["weight"])
-        guess_weight = cast(int, guess["weight"])
-        diff_w = target_weight - guess_weight
-        arrow = "↑" if diff_w > 0 else "↓"
-        w1 = target_weight / 10
-        w2 = guess_weight / 10
-        if diff_w == 0:
-            hints.append(Hint("体重", f"{w1:.1f}kg", "exact"))
-        elif abs(diff_w) <= preset["weight_range"]:
-            hints.append(Hint("体重", f"{w2:.1f}kg", "close", arrow))
-        else:
-            hints.append(Hint("体重", f"{w2:.1f}kg", "far", arrow))
+        hints.append(_compare_stat(
+            cast(int, target["weight"]),
+            cast(int, guess["weight"]),
+            "体重", f"{cast(int, guess['weight']) / 10:.1f}kg", "weight_range", preset,
+            formatter=lambda v: f"{v / 10:.1f}kg",
+        ))
 
     # ── 更多外形信息 ──
-    if config.get("show_more_appearance"):
-        if "height" in target and "height" in guess:
-            target_height = cast(int, target["height"])
-            guess_height = cast(int, guess["height"])
-            h_ratio = target_height / max(guess_height, 1)
-            if h_ratio > 1.5:
-                hints.append(Hint("体型", "更大", "miss"))
-            elif h_ratio < 0.67:
-                hints.append(Hint("体型", "更小", "miss"))
-            else:
-                hints.append(Hint("体型", "差不多", "partial"))
+    if config.get("show_more_appearance") and height_available:
+        target_height = cast(int, target["height"])
+        guess_height = cast(int, guess["height"])
+        h_ratio = target_height / max(guess_height, 1)
+        if h_ratio > 1.5:
+            hints.append(Hint("体型", "更大", "miss"))
+        elif h_ratio < 0.67:
+            hints.append(Hint("体型", "更小", "miss"))
+        else:
+            hints.append(Hint("体型", "差不多", "partial"))
 
     return hints
+
+
+def compute_remaining_pool(
+    pool: list[PokemonData],
+    guesses_with_hints: list[GuessRecord],
+    config: ConfigDict,
+) -> int:
+    """Count pool members consistent with all revealed hints.
+
+    A candidate survives if, for every previous guess, comparing
+    guess → candidate produces the same hint levels as the actual
+    hints revealed to the player.
+    """
+    if not guesses_with_hints:
+        return len(pool)
+
+    surviving = 0
+    for candidate in pool:
+        consistent = True
+        for guess_poke, actual_hints in guesses_with_hints:
+            candidate_hints = compare_pokemon(guess_poke, candidate, config)
+            actual_levels = {h.label: h.level for h in actual_hints}
+            candidate_levels = {h.label: h.level for h in candidate_hints}
+            for label in actual_levels:
+                if label in candidate_levels and actual_levels[label] != candidate_levels[label]:
+                    consistent = False
+                    break
+            if not consistent:
+                break
+        if consistent:
+            surviving += 1
+
+    return surviving
