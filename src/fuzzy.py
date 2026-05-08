@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, TypedDict, cast, override
 
-from constants import GEN_MAP, TYPE_COLORS
+from constants import GEN_MAP, TYPE_COLORS, FORM_INDICATORS
 from data import build_pokemon_index
 
 
@@ -41,15 +41,18 @@ class PokemonEntry(TypedDict, total=False):
 
 
 PokemonIndex = dict[int | str, PokemonEntry]
+IdMap = dict[int, list[PokemonEntry]]
 
 _pokemon_index: PokemonIndex | None = None
+_id_map: IdMap | None = None
 
 
-def _get_index(pokemon_list: list[PokemonEntry]) -> PokemonIndex:
-    global _pokemon_index
-    if _pokemon_index is None:
-        _pokemon_index = cast(PokemonIndex, build_pokemon_index(cast(list[dict[str, object]], pokemon_list)))
-    return _pokemon_index
+def _get_index(pokemon_list: list[PokemonEntry]) -> tuple[PokemonIndex, IdMap]:
+    global _pokemon_index, _id_map
+    if _pokemon_index is None or _id_map is None:
+        _pokemon_index, _id_map = build_pokemon_index(cast(list[dict[str, object]], pokemon_list))
+        _pokemon_index = cast(PokemonIndex, _pokemon_index)
+    return _pokemon_index, _id_map
 
 
 def score_pokemon(query: str, p: PokemonEntry) -> int:
@@ -66,7 +69,7 @@ def score_pokemon(query: str, p: PokemonEntry) -> int:
     # 编号前缀
     if poke_id.startswith(q.lstrip("#")) and len(q) >= 2:
         return 90
-    # 中文名精确
+    # 中文名精确（优先完整匹配，包括地区形态）
     if name_cn == q:
         return 100
     # 英文名精确
@@ -75,8 +78,11 @@ def score_pokemon(query: str, p: PokemonEntry) -> int:
     # 日文名精确
     if name_jp and name_jp == q:
         return 100
-    # 中文名前缀
+    # 中文名前缀（完整匹配地区形态标识）
     if name_cn.startswith(q) and len(q) >= 1:
+        # 如果用户输入包含地区标识，给予更高分数
+        if any(kw in q for kw in FORM_INDICATORS):
+            return 95
         return 85
     # 英文名前缀
     if name_en.startswith(q):
@@ -123,21 +129,59 @@ def get_fuzzy_matches(query: str, pokemon_list: list[PokemonEntry], limit: int =
 
 
 def find_pokemon(query: str, pokemon_list: list[PokemonEntry]) -> PokemonEntry | None:
-    """精确查找宝可梦（中英文名、编号），找不到则取最佳模糊匹配"""
+    """精确查找宝可梦（中英文名、编号），找不到则取最佳模糊匹配
+    
+    对于地区形态（共享相同编号），会通过名称进一步区分：
+    - 如果输入包含 FORM_INDICATORS 中的标识符，优先匹配地区形态
+    - 否则匹配原版形态
+    """
     q = query.strip().lower()
-    idx = _get_index(pokemon_list)
+    query_raw = query.strip()
+    idx, id_map = _get_index(pokemon_list)
 
-    # O(1) exact lookups
-    try:
-        num = int(q.lstrip("#"))
-        if num in idx:
-            return idx[num]
-    except ValueError:
-        pass
+    # 检查是否有形态标识符（用于地区形态区分）
+    has_form_indicator = any(kw in query_raw for kw in FORM_INDICATORS)
 
+    # O(1) exact lookups by ID
+    # 先尝试提取数字 ID（支持 "26" 或 "26-阿罗拉的样子" 格式）
+    num_str = ""
+    for ch in q.lstrip("#"):
+        if ch.isdigit():
+            num_str += ch
+        else:
+            break
+    
+    if num_str:
+        try:
+            num = int(num_str)
+            if num in id_map:
+                candidates = id_map[num]
+                if len(candidates) == 1:
+                    return candidates[0]
+                # 多个候选（地区形态），通过名称区分
+                if has_form_indicator:
+                    # 尝试精确匹配用户输入的具体形态（通过形态标识符）
+                    for p in candidates:
+                        if "-" in p["name"]:
+                            # 提取形态名称（如 "阿罗拉的样子", "伽勒尔的样子"）
+                            form_part = p["name"].split("-", 1)[1] if "-" in p["name"] else ""
+                            # 检查用户查询是否包含这个形态标识符
+                            if form_part and form_part in query_raw:
+                                return p
+                    # 如果没有精确匹配，返回任意一个地区形态（名称包含 "-" 的）
+                    for p in candidates:
+                        if "-" in p["name"]:
+                            return p
+                # 否则返回第一个（通常是原版）
+                return candidates[0]
+        except ValueError:
+            pass
+
+    # Exact lookup by Chinese name
     if query.strip() in idx:
         return idx[query.strip()]
 
+    # Exact lookup by English name (normalized)
     en_key = q.replace("-", "").replace(" ", "")
     if en_key in idx:
         return idx[en_key]

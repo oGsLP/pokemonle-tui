@@ -115,11 +115,12 @@ def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
             if idx > 0:
                 _ = t.append("/", style=color)
             type_key = TYPE_CN_TO_EN_MAP.get(type_name)
-            type_style = TYPE_COLORS.get(type_key, color) if type_key else color
+            type_color = TYPE_COLORS.get(type_key, color) if type_key else color
             if level == "partial" and type_name in matched_types:
-                _ = t.append(type_name, style=type_style)
+                # 部分匹配：白色字体 + 背景色块
+                _ = t.append(type_name, style=f"white on {type_color}")
             else:
-                _ = t.append(type_name, style=f"dim {type_style}")
+                _ = t.append(type_name, style=f"dim {type_color}")
     else:
         _ = t.append(val, style=color)
     if extra and label != "属性":
