@@ -7,17 +7,18 @@ Rich 终端 Wordle 风格宝可梦猜谜游戏，基于 [QuantAskk/pokemonle](ht
 - 🎮 **Wordle 玩法** — 多维度提示（编号/属性/世代/种族值/身高/体重/蛋组）
 - 🌏 **多语言输入** — 中文名、英文名、日文名、编号均可，`prompt_toolkit` 模糊补全
 - ⚙️ **三种难度** — 简单/普通/困难，影响提示容差和猜测次数
+- 🖼️ **终端精灵图** — 猜对/揭晓/退出时渲染宝可梦精灵图（基于 term-image）
 - 🎨 **Rich TUI** — 彩色表格、属性色标、emoji 图标
 - 📊 **游戏统计** — 胜率、平均猜测次数持久化
 - 🗂️ **世代筛选** — 1-9 世代自由组合
-- 🔥 **PokeAPI 集成** — 种族值、蛋组等详细数据懒加载 + 本地缓存
+- 🔥 **PokeAPI 集成** — 种族值、蛋组等详细数据懒加载 + 本地缓存 + 精灵图缓存
 
 ## 安装
 
 ```bash
 git clone https://github.com/oGsLP/pokemonle-tui.git
 cd pokemonle-tui
-pip install rich prompt_toolkit
+pip install rich prompt_toolkit "term-image>=0.7.2" Pillow
 ```
 
 ## 运行
@@ -54,7 +55,8 @@ python3 -m pytest tests/ -v
 ## 鸣谢
 
 - 原始项目 **[QuantAskk/pokemonle](https://github.com/QuantAskk/pokemonle)** — 宝可梦数据与核心玩法设计
-- **[PokeAPI](https://pokeapi.co/)** — 宝可梦详细数据
+- **[PokeAPI](https://pokeapi.co/)** — 宝可梦详细数据 & 精灵图
+- **[term-image](https://github.com/AnonymouX47/term-image)** — 终端图片渲染
 
 ## 许可
 
