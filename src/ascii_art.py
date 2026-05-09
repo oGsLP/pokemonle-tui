@@ -33,8 +33,9 @@ _SPRITE_CACHE_DIR: str = os.path.join(
     ".sprite_cache",
 )
 
-# 内存缓存：name_en -> 缓存文件路径
+# 内存缓存：name_en -> 缓存文件路径 (thread-safe)
 _cache: dict[str, str] = {}
+_cache_lock = threading.Lock()
 
 # PokeAPI 精灵图 URL 模板
 _SPRITE_URL_TEMPLATE = (
@@ -94,15 +95,17 @@ def get_sprite_path(name_en: str, pokemon_id: int = 0) -> Optional[str]:
         缓存 PNG 文件的路径，或 None
     """
     if name_en in _cache:
-        cached = _cache[name_en]
-        if os.path.exists(cached):
+        with _cache_lock:
+            cached = _cache.get(name_en, "")
+        if cached and os.path.exists(cached):
             return cached
 
-    # 1) 尝试已有缓存文件（按编号）
+    sprite_path = ""
     if pokemon_id > 0:
         sprite_path = os.path.join(_SPRITE_CACHE_DIR, f"{pokemon_id}.png")
         if os.path.exists(sprite_path):
-            _cache[name_en] = sprite_path
+            with _cache_lock:
+                _cache[name_en] = sprite_path
             return sprite_path
 
     # 2) 触发后台异步下载（不阻塞）
