@@ -5,6 +5,7 @@ import json
 import os
 import ssl
 import sys
+import unicodedata
 import urllib.error
 import urllib.request
 from typing import Callable, Dict, List, Optional
@@ -42,7 +43,7 @@ def load_pokemon_data() -> List[Dict]:
                 "types": entry.get("types", []),
                 "generation": entry.get("generation", ""),
                 "_name_en_norm": name_en.lower().replace("-", "").replace(" ", ""),
-                "_name_jp_norm": entry.get("name_jp", "").lower(),
+                "_name_jp_norm": unicodedata.normalize("NFKC", entry.get("name_jp", "")).lower(),
                 "_id_str": str(int(entry["index"])),
             })
         except (KeyError, ValueError) as exc:
