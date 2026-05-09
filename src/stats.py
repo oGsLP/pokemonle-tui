@@ -1,11 +1,17 @@
 """
 游戏统计 — 胜率/猜测次数的持久化
 """
-import fcntl
 import json
 import os
 import sys
 from typing import Dict
+
+try:
+    import fcntl
+    _HAS_FCNTL = True
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
+    _HAS_FCNTL = False
 
 import constants
 
@@ -38,7 +44,8 @@ def save_game_stats(won: bool, num_guesses: int) -> None:
     path = _stats_file()
     try:
         with open(path, "a+") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
+            if _HAS_FCNTL:
+                fcntl.flock(f, fcntl.LOCK_EX)
             f.seek(0)
             try:
                 stats = json.load(f) if os.path.getsize(path) > 0 else _default_stats()
