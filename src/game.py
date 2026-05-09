@@ -130,7 +130,7 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
     for k in header_keys:
         table.add_column(k, justify="center", no_wrap=True)
 
-    rows = guesses_with_hints
+    rows = list(reversed(guesses_with_hints)) if config.get("reverse_order") else guesses_with_hints
 
     for i, (guess_poke, hints) in enumerate(rows, 1):
         hint_dict: dict[str, tuple[str, str, str]] = {}

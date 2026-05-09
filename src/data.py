@@ -143,13 +143,6 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
         return {
             "egg_groups": [group["name"] for group in data.get("egg_groups", [])],
             "capture_rate": data.get("capture_rate"),
-            "hatch_counter": data.get("hatch_counter"),
-            "gender_rate": data.get("gender_rate"),
-            "is_legendary": data.get("is_legendary"),
-            "is_mythical": data.get("is_mythical"),
-            "growth_rate": data.get("growth_rate", {}).get("name"),
-            "shape": data.get("shape", {}).get("name") if data.get("shape") else None,
-            "habitat": data.get("habitat", {}).get("name") if data.get("habitat") else None,
         }
 
     return _cached_or_fetch(cache_file, url, _extract, f"species #{poke_id}")
