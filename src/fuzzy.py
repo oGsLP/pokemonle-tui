@@ -3,6 +3,8 @@
 """
 from __future__ import annotations
 
+from collections import deque
+
 from typing import Any, cast, override
 
 from constants import GEN_MAP, TYPE_COLORS, TYPE_CN_TO_EN_MAP
@@ -68,9 +70,9 @@ class PokemonTrie:
 
     def _collect_ids(self, node: _TrieNode, limit: int) -> list[int]:
         result: list[int] = []
-        queue: list[_TrieNode] = [node]
+        queue: deque[_TrieNode] = deque([node])
         while queue and len(result) < limit:
-            cur = queue.pop(0)
+            cur = queue.popleft()
             for pid in cur.pokemon_ids:
                 if pid not in result:
                     result.append(pid)
