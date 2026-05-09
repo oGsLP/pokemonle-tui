@@ -16,18 +16,14 @@ except ImportError:
 import constants
 
 
-def _stats_file() -> str:
-    """动态读取统计文件路径（方便测试时替换）"""
-    return constants.STATS_FILE
-
-
 def _default_stats() -> dict:
     return {"wins": 0, "total": 0, "guesses_history": [], "current_streak": 0, "best_streak": 0}
 
 
-def _load_stats() -> Dict:
+def _load_stats(path: str | None = None) -> Dict:
     """加载统计文件，不存在则返回空结构"""
-    path = _stats_file()
+    if path is None:
+        path = constants.STATS_FILE
     if os.path.exists(path):
         try:
             with open(path, "r") as f:
@@ -39,9 +35,10 @@ def _load_stats() -> Dict:
     return _default_stats()
 
 
-def save_game_stats(won: bool, num_guesses: int) -> None:
+def save_game_stats(won: bool, num_guesses: int, path: str | None = None) -> None:
     """保存一局游戏的结果（含连胜追踪）"""
-    path = _stats_file()
+    if path is None:
+        path = constants.STATS_FILE
     try:
         with open(path, "a+") as f:
             if _HAS_FCNTL:

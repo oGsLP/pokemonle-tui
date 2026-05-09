@@ -11,10 +11,6 @@ import constants
 JsonObject = dict[str, object]
 
 
-def _config_file() -> str:
-    """动态读取配置文件路径（方便测试时替换）"""
-    return constants.CONFIG_FILE
-
 
 def _validate_config(cfg: JsonObject) -> JsonObject:
     validated: JsonObject = {}
@@ -36,9 +32,10 @@ def _validate_config(cfg: JsonObject) -> JsonObject:
     return validated
 
 
-def load_config() -> dict[str, object]:
+def load_config(path: str | None = None) -> dict[str, object]:
     """从文件加载游戏配置，缺失字段自动补全"""
-    path = _config_file()
+    if path is None:
+        path = constants.CONFIG_FILE
     if os.path.exists(path):
         try:
             with open(path, "r") as f:
@@ -58,10 +55,12 @@ def load_config() -> dict[str, object]:
     return dict(constants.DEFAULT_CONFIG)
 
 
-def save_config(cfg: dict[str, object]) -> None:
+def save_config(cfg: dict[str, object], path: str | None = None) -> None:
     """保存游戏配置到文件"""
+    if path is None:
+        path = constants.CONFIG_FILE
     try:
-        with open(_config_file(), "w") as f:
+        with open(path, "w") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     except OSError as exc:
         print(f"警告: 无法保存配置文件: {exc}", file=sys.stderr)
