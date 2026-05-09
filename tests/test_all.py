@@ -22,8 +22,8 @@ from data import load_pokemon_data, build_pokemon_index, fetch_pokeapi_data, fet
 from config import load_config, save_config, _validate_config
 from comparison import compare_pokemon, compute_remaining_pool
 from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon, PokemonTrie
-from stats import save_game_stats, get_stats_summary, _load_stats
-from game import _format_hint
+from stats import save_game_stats, get_stats_summary, _load_stats, _build_distribution
+from game import _format_hint, _safe_save_stats
 from share import format_share_result
 import share
 import ascii_art
@@ -915,8 +915,89 @@ class TestPokemonTrie:
 
 
 # ══════════════════════════════════════════════
-#  Test: game.py run_game
+#  Test: stats.py _build_distribution
 # ══════════════════════════════════════════════
+
+class TestBuildDistribution:
+    def test_empty_history(self):
+        assert _build_distribution([]) == {}
+
+    def test_single_entry(self):
+        assert _build_distribution([3]) == {3: 1}
+
+    def test_multiple_same(self):
+        assert _build_distribution([3, 3, 3]) == {3: 3}
+
+    def test_multiple_different(self):
+        dist = _build_distribution([1, 2, 2, 3, 3, 3])
+        assert dist == {1: 1, 2: 2, 3: 3}
+
+
+# ══════════════════════════════════════════════
+#  Test: game.py _safe_save_stats
+# ══════════════════════════════════════════════
+
+class TestSafeSaveStats:
+    def test_save_success(self, monkeypatch, tmp_path):
+        old = constants.STATS_FILE
+        try:
+            stats_path = str(tmp_path / "stats.json")
+            constants.STATS_FILE = stats_path
+            _safe_save_stats(True, 5)
+            stats = _load_stats()
+            assert stats["total"] == 1
+            assert stats["wins"] == 1
+        finally:
+            constants.STATS_FILE = old
+
+    def test_save_failure_no_crash(self, monkeypatch, tmp_path):
+        old = constants.STATS_FILE
+        try:
+            constants.STATS_FILE = str(tmp_path / "nonexistent" / "stats.json")
+            _safe_save_stats(True, 3)
+        finally:
+            constants.STATS_FILE = old
+
+    def test_save_loss(self, monkeypatch, tmp_path):
+        old = constants.STATS_FILE
+        try:
+            stats_path = str(tmp_path / "stats.json")
+            constants.STATS_FILE = stats_path
+            _safe_save_stats(False, 10)
+            stats = _load_stats()
+            assert stats["total"] == 1
+            assert stats["wins"] == 0
+        finally:
+            constants.STATS_FILE = old
+
+
+# ══════════════════════════════════════════════
+#  Test: comparison.py edge cases (#32)
+# ══════════════════════════════════════════════
+
+class TestComparisonEdgeCases:
+    def test_empty_types(self):
+        target = {"id": 1, "types": [], "generation": "第一世代"}
+        guess = {"id": 2, "types": [], "generation": "第一世代"}
+        hints = compare_pokemon(target, guess, dict(DEFAULT_CONFIG))
+        type_hint = next(h for h in hints if h.label == "属性")
+        assert type_hint.level == "miss"
+        assert type_hint.value == ""
+
+    def test_missing_generation(self):
+        target = {"id": 1, "types": ["草"], "generation": ""}
+        guess = {"id": 2, "types": ["草"], "generation": ""}
+        hints = compare_pokemon(target, guess, dict(DEFAULT_CONFIG))
+        gen_hint = next(h for h in hints if h.label == "世代")
+        assert gen_hint.level == "exact"
+
+    def test_mischief_all_non_exact_have_no_arrow(self):
+        target = {"id": 1, "types": ["草"], "generation": "第一世代", "stat_total": 300, "speed": 90}
+        guess = {"id": 2, "types": ["火"], "generation": "第一世代", "stat_total": 400, "speed": 80}
+        config = {**DEFAULT_CONFIG, "mischief": True, "show_gen_arrow": True}
+        hints = compare_pokemon(target, guess, config)
+        id_hint = next(h for h in hints if h.label == "编号")
+        assert len(id_hint) == 4
 
 import game
 
