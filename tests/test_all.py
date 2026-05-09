@@ -20,10 +20,12 @@ from constants import (
 )
 from data import load_pokemon_data, build_pokemon_index, fetch_pokeapi_data, fetch_species_data, get_pokemon_details
 from config import load_config, save_config, _validate_config
-from comparison import compare_pokemon
-from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon
+from comparison import compare_pokemon, compute_remaining_pool
+from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon, PokemonTrie
 from stats import save_game_stats, get_stats_summary, _load_stats
 from game import _format_hint
+from share import format_share_result
+import share
 import ascii_art
 
 
@@ -769,6 +771,147 @@ class TestAsciiArt:
         monkeypatch.setattr(ascii_art, "_SPRITE_CACHE_DIR", str(tmp_path / "empty_cache"))
         result = ascii_art.show_sprite("NoSuchPokemon", 99999)
         assert result is False
+
+
+# ══════════════════════════════════════════════
+#  Test: comparison.py — compute_remaining_pool
+# ══════════════════════════════════════════════
+
+class TestComputeRemainingPool:
+    def test_empty_guesses_returns_pool_size(self, pokemon_list):
+        config = dict(DEFAULT_CONFIG)
+        pool = pokemon_list[:10]
+        assert compute_remaining_pool(pool, [], config) == 10
+
+    def test_same_pokemon_eliminates_all_but_one(self, pokemon_25, default_config):
+        pool = [pokemon_25, pokemon_25]
+        hints = compare_pokemon(pokemon_25, pokemon_25, default_config)
+        guesses_with_hints = [(pokemon_25, hints)]
+        remaining = compute_remaining_pool(pool, guesses_with_hints, default_config)
+        assert remaining == 2
+
+    def test_wrong_guess_preserves_pool(self, pokemon_1, pokemon_25, default_config):
+        pool = [pokemon_1, pokemon_25]
+        hints = compare_pokemon(pokemon_25, pokemon_1, default_config)
+        guesses_with_hints = [(pokemon_1, hints)]
+        remaining = compute_remaining_pool(pool, guesses_with_hints, default_config)
+        assert remaining >= 1
+
+    def test_multiple_guesses_reduce_pool(self, pokemon_1, pokemon_4, pokemon_25, default_config):
+        """Two different wrong guesses should eliminate more candidates than one."""
+        pool = [pokemon_1, pokemon_4, pokemon_25]
+        hints1 = compare_pokemon(pokemon_25, pokemon_1, default_config)
+        guesses1 = [(pokemon_1, hints1)]
+        remaining1 = compute_remaining_pool(pool, guesses1, default_config)
+        assert remaining1 >= 1
+
+        hints2 = compare_pokemon(pokemon_25, pokemon_4, default_config)
+        guesses2 = [(pokemon_1, hints1), (pokemon_4, hints2)]
+        remaining2 = compute_remaining_pool(pool, guesses2, default_config)
+        assert remaining2 >= 1
+        assert remaining2 <= remaining1
+
+    def test_identical_pool_and_guess_all_exact(self, pokemon_25, default_config):
+        hints = compare_pokemon(pokemon_25, pokemon_25, default_config)
+        guesses_with_hints = [(pokemon_25, hints)]
+        remaining = compute_remaining_pool([pokemon_25], guesses_with_hints, default_config)
+        assert remaining == 1
+
+
+# ══════════════════════════════════════════════
+#  Test: share.py — format_share_result
+# ══════════════════════════════════════════════
+
+class TestFormatShareResult:
+    def test_won_format(self, pokemon_25, default_config):
+        hints = compare_pokemon(pokemon_25, pokemon_25, default_config)
+        result = format_share_result(
+            [(pokemon_25, hints)], 10,
+            pokemon_25["name"], pokemon_25["name_en"], pokemon_25["id"],
+            won=True, generation_label="1代",
+        )
+        assert "Pokémonle #25" in result
+        assert "1/10" in result
+        assert "皮卡丘" in result
+        assert "1代" in result
+
+    def test_lost_format(self, pokemon_25, default_config):
+        result = format_share_result(
+            [], 10,
+            pokemon_25["name"], pokemon_25["name_en"], pokemon_25["id"],
+            won=False,
+        )
+        assert "Pokémonle #25" in result
+        assert "X/10" in result
+        assert "皮卡丘" in result
+
+    def test_columns_present(self, pokemon_1, pokemon_4, default_config):
+        hints = compare_pokemon(pokemon_1, pokemon_4, default_config)
+        result = format_share_result(
+            [(pokemon_4, hints)], 10,
+            pokemon_1["name"], pokemon_1["name_en"], pokemon_1["id"],
+            won=False,
+        )
+        for label in ["编号", "属性"]:
+            assert label in result
+
+    def test_level_symbols_present(self, pokemon_25, default_config):
+        hints = compare_pokemon(pokemon_25, pokemon_25, default_config)
+        result = format_share_result(
+            [(pokemon_25, hints)], 10,
+            pokemon_25["name"], pokemon_25["name_en"], pokemon_25["id"],
+            won=True,
+        )
+        assert "●" in result
+
+
+# ══════════════════════════════════════════════
+#  Test: fuzzy.py — PokemonTrie
+# ══════════════════════════════════════════════
+
+class TestPokemonTrie:
+    def test_prefix_search_exact_cn(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        results = trie.prefix_search("皮卡丘")
+        assert len(results) >= 1
+        assert results[0]["id"] == 25
+
+    def test_prefix_search_cn_prefix(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        results = trie.prefix_search("皮卡")
+        assert len(results) >= 1
+        assert results[0]["id"] == 25
+
+    def test_prefix_search_en(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        results = trie.prefix_search("pikachu")
+        assert len(results) >= 1
+        assert results[0]["id"] == 25
+
+    def test_prefix_search_by_id(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        results = trie.prefix_search("25")
+        assert len(results) >= 1
+        assert results[0]["id"] == 25
+
+    def test_prefix_search_empty_returns_empty(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        assert trie.prefix_search("") == []
+
+    def test_prefix_search_no_match(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        assert trie.prefix_search("zzzzz_nonexistent") == []
+
+    def test_prefix_search_limit(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        results = trie.prefix_search("龙", limit=5)
+        assert len(results) <= 5
+
+    def test_case_insensitive(self, pokemon_list):
+        trie = PokemonTrie(pokemon_list)
+        results = trie.prefix_search("PIKACHU")
+        assert len(results) >= 1
+        assert results[0]["id"] == 25
 
 
 # ══════════════════════════════════════════════
