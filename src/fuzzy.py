@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from typing import Any, cast, override
+from typing import Any, override
 
 from constants import GEN_MAP, TYPE_COLORS, TYPE_CN_TO_EN_MAP
 from data import build_pokemon_index
@@ -171,10 +171,10 @@ def get_fuzzy_matches(query: str, pokemon_list: list[PokemonEntry], limit: int =
     return [p for _, p in scored[:limit]]
 
 
-def find_pokemon(query: str, pokemon_list: list[PokemonEntry], index: dict[object, PokemonEntry] | None = None) -> PokemonEntry | None:
+def find_pokemon(query: str, pokemon_list: list[PokemonEntry], index: dict[int | str, PokemonEntry] | None = None) -> PokemonEntry | None:
     """精确查找宝可梦（中英文名、编号），找不到则取最佳模糊匹配"""
     q = query.strip().lower()
-    idx = cast(dict[object, PokemonEntry], index if index is not None else build_pokemon_index(cast(list[dict[str, object]], pokemon_list)))
+    idx = index if index is not None else build_pokemon_index(pokemon_list)
 
     # O(1) exact lookups
     try:

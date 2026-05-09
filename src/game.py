@@ -7,7 +7,6 @@ import os
 import random
 import threading
 import time
-from typing import cast
 
 from rich.panel import Panel
 
@@ -94,7 +93,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         return
 
     target = random.choice(pool)
-    target_details: PokemonEntry = cast(PokemonEntry, dict(target))
+    target_details: PokemonEntry = target
     _target_done = threading.Event()
     _target_status: str = "loading"
     _target_error: str = ""
@@ -102,12 +101,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     def _fetch_target() -> None:
         nonlocal target_details, _target_status, _target_error
         try:
-            enriched = cast(PokemonEntry, get_pokemon_details(
-                cast(dict[str, object], target), quiet=True))
-            species = cast(dict[str, object] | None,
-                           fetch_species_data(target["id"], quiet=True))
+            enriched = get_pokemon_details(target, quiet=True)
+            species = fetch_species_data(target["id"], quiet=True)
             if species:
-                enriched["egg_groups"] = cast(list[str], species.get("egg_groups", []))
+                enriched["egg_groups"] = species.get("egg_groups", [])
                 cr = species.get("capture_rate")
                 enriched["capture_rate"] = int(cr) if cr is not None else 0
             target_details = enriched
@@ -124,8 +121,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     guessed_names: set[str] = set()
     start_time = time.time()
 
-    # 构建快速索引 (游戏内复用，避免每次 guess 重建)
-    pokemon_index: dict[object, object] = build_pokemon_index(cast(list[dict[str, object]], pokemon_list))
+    pokemon_index = build_pokemon_index(pokemon_list)
 
     # 补全会话
     completer = PokemonCompleter(pokemon_list)
@@ -192,9 +188,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             _safe_save_stats(False, len(guesses_with_hints))
             return
 
-        guess = cast(PokemonEntry | None, find_pokemon(guess_input, pokemon_list, cast(dict[object, PokemonEntry], pokemon_index)))
+        guess = find_pokemon(guess_input, pokemon_list, pokemon_index)
         if not guess:
-            suggestions = cast(list[PokemonEntry], get_fuzzy_matches(guess_input, pokemon_list, limit=5))
+            suggestions = get_fuzzy_matches(guess_input, pokemon_list, limit=5)
             if suggestions:
                 sug = "  ".join(f"[cyan]{s['name']}[/cyan]({s['name_en']})" for s in suggestions)
                 _console.print(f"[yellow]找不到「{guess_input}」，你是不是: {sug}[/yellow]")
@@ -218,13 +214,11 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
         guessed_names.add(guess["name"])
         with _console.status("[dim]🔄 获取中...[/dim]", spinner="dots"):
-            guess_details = cast(PokemonEntry, get_pokemon_details(
-                cast(dict[str, object], guess), quiet=True))
+            guess_details = get_pokemon_details(guess, quiet=True)
         if config.get("show_egg_group"):
-            guess_species = cast(dict[str, object] | None,
-                                 fetch_species_data(guess["id"], quiet=True))
+            guess_species = fetch_species_data(guess["id"], quiet=True)
             if guess_species:
-                guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
+                guess_details["egg_groups"] = guess_species.get("egg_groups", [])
         _target_done.wait(timeout=8)
         hints = list(compare_pokemon(target_details, guess_details, config))
 
@@ -297,7 +291,6 @@ def main() -> None:
         _console.print(f"[red]错误: {exc}[/red]")
         return
     _console.print(f"[green]✅ 已加载 {len(pokemon_list)} 只宝可梦[/green]")
-    pokemon_list = cast(list[PokemonEntry], pokemon_list)
 
     gen_counts: dict[str, int] = {}
     for p in pokemon_list:

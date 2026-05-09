@@ -11,9 +11,10 @@ import urllib.request
 from typing import Callable, Dict, List, Optional
 
 from constants import DATA_FILE, CACHE_DIR
+from poketypes import PokemonEntry
 
 
-def load_pokemon_data() -> List[Dict]:
+def load_pokemon_data() -> list[PokemonEntry]:
     """加载宝可梦基础数据 (来自 pokemon_full_list.json)"""
     if not os.path.exists(DATA_FILE):
         raise FileNotFoundError(f"宝可梦数据文件不存在: {DATA_FILE}")
@@ -29,11 +30,11 @@ def load_pokemon_data() -> List[Dict]:
     if not raw:
         print(f"警告: 宝可梦数据为空: {DATA_FILE}", file=sys.stderr)
 
-    pokemon: List[Dict] = []
+    pokemon: list[PokemonEntry] = []
     for entry in raw:
         try:
             name_en = entry.get("name_en", "")
-            pokemon.append({
+            poke: PokemonEntry = {
                 "index": entry["index"],
                 "id": int(entry["index"]),
                 "name": entry["name"],
@@ -44,16 +45,17 @@ def load_pokemon_data() -> List[Dict]:
                 "_name_en_norm": name_en.lower().replace("-", "").replace(" ", ""),
                 "_name_jp_norm": unicodedata.normalize("NFKC", entry.get("name_jp", "")).lower(),
                 "_id_str": str(int(entry["index"])),
-            })
+            }
+            pokemon.append(poke)
         except (KeyError, ValueError) as exc:
             print(f"警告: 跳过损坏的宝可梦数据条目: {exc}", file=sys.stderr)
             continue
     return pokemon
 
 
-def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
+def build_pokemon_index(pokemon_list: list[PokemonEntry]) -> dict[int | str, PokemonEntry]:
     """构建宝可梦快速索引，支持 id / 中文名 / 英文名 / 日文名 查找"""
-    index: Dict = {}
+    index: dict[int | str, PokemonEntry] = {}
     for pokemon in pokemon_list:
         # ID → first entry wins (original forms appear before regional variants)
         index.setdefault(pokemon["id"], pokemon)
@@ -159,9 +161,10 @@ def fetch_species_data(poke_id: int, *, quiet: bool = False) -> Optional[Dict]:
     return _cached_or_fetch(cache_file, url, _extract, f"species #{poke_id}", quiet=quiet)
 
 
-def get_pokemon_details(poke: Dict, *, quiet: bool = False) -> Dict:
+def get_pokemon_details(poke: PokemonEntry, *, quiet: bool = False) -> PokemonEntry:
     """获取宝可梦详细信息（基础数据 + PokeAPI 补充种族值/身高/体重）"""
-    details: Dict = {**poke}
+    details: PokemonEntry = {**poke}  # type: ignore[typeddict-unknown-key]
+    api_data = fetch_pokeapi_data(poke["id"], quiet=quiet)
     api_data = fetch_pokeapi_data(poke["id"], quiet=quiet)
     if api_data:
         details.update(api_data)
