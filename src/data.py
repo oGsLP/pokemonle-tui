@@ -12,9 +12,6 @@ from typing import Callable, Dict, List, Optional
 
 from constants import DATA_FILE, CACHE_DIR
 
-# When True, suppress all progress prints (for threaded/background use)
-QUIET = False
-
 
 def load_pokemon_data() -> List[Dict]:
     """加载宝可梦基础数据 (来自 pokemon_full_list.json)"""
@@ -72,7 +69,8 @@ def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
 
 
 def _cached_or_fetch(
-    cache_file: str, url: str, extract: Callable[[dict], dict], label: str
+    cache_file: str, url: str, extract: Callable[[dict], dict], label: str,
+    *, quiet: bool = False,
 ) -> Optional[Dict]:
     """通用缓存+拉取逻辑：读缓存 → 网络拉取 → 原子写缓存"""
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -81,27 +79,27 @@ def _cached_or_fetch(
             with open(cache_file, "r") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            if not QUIET:
+            if not quiet:
                 print(f"警告: 缓存文件损坏，跳过: {cache_file}", file=sys.stderr)
             return None
 
-    if not QUIET:
+    if not quiet:
         print(f"  ⏳ 正在从 PokeAPI 获取 {label}...", file=sys.stderr)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "PokemonleCLI/1.0"})
         ssl_context = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=8, context=ssl_context) as resp:
             if resp.status != 200:
-                if not QUIET:
+                if not quiet:
                     print(f"  ⚠ PokeAPI 返回状态码 {resp.status} ({label})", file=sys.stderr)
                 return None
             data = json.loads(resp.read().decode())
     except urllib.error.URLError as exc:
-        if not QUIET:
+        if not quiet:
             print(f"  ⚠ 获取 {label} 失败: {exc}", file=sys.stderr)
         return None
     except Exception as exc:
-        if not QUIET:
+        if not quiet:
             print(f"  ⚠ 处理 {label} 失败: {exc}", file=sys.stderr)
         return None
 
@@ -112,14 +110,14 @@ def _cached_or_fetch(
             json.dump(result, f)
         os.replace(tmp_file, cache_file)
     except OSError as exc:
-        if not QUIET:
+        if not quiet:
             print(f"警告: 无法写入缓存文件 {cache_file}: {exc}", file=sys.stderr)
-    if not QUIET:
+    if not quiet:
         print(f"  ✅ {label} 已缓存", file=sys.stderr)
     return result
 
 
-def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
+def fetch_pokeapi_data(poke_id: int, *, quiet: bool = False) -> Optional[Dict]:
     """从 PokeAPI 获取详细数据，带本地文件缓存"""
     cache_file = os.path.join(CACHE_DIR, f"{poke_id:04d}.json")
     url = f"https://pokeapi.co/api/v2/pokemon/{poke_id}"
@@ -132,10 +130,10 @@ def fetch_pokeapi_data(poke_id: int) -> Optional[Dict]:
             "abilities": [a["ability"]["name"] for a in data["abilities"]],
         }
 
-    return _cached_or_fetch(cache_file, url, _extract, f"宝可梦 #{poke_id}")
+    return _cached_or_fetch(cache_file, url, _extract, f"宝可梦 #{poke_id}", quiet=quiet)
 
 
-def fetch_species_data(poke_id: int) -> Optional[Dict]:
+def fetch_species_data(poke_id: int, *, quiet: bool = False) -> Optional[Dict]:
     """从 PokeAPI 获取 species 数据，带本地文件缓存"""
     cache_file = os.path.join(CACHE_DIR, f"{poke_id:04d}_species.json")
     url = f"https://pokeapi.co/api/v2/pokemon-species/{poke_id}"
@@ -146,13 +144,13 @@ def fetch_species_data(poke_id: int) -> Optional[Dict]:
             "capture_rate": data.get("capture_rate"),
         }
 
-    return _cached_or_fetch(cache_file, url, _extract, f"species #{poke_id}")
+    return _cached_or_fetch(cache_file, url, _extract, f"species #{poke_id}", quiet=quiet)
 
 
-def get_pokemon_details(poke: Dict) -> Dict:
+def get_pokemon_details(poke: Dict, *, quiet: bool = False) -> Dict:
     """获取宝可梦详细信息（基础数据 + PokeAPI 补充种族值/身高/体重）"""
     details: Dict = {**poke}
-    api_data = fetch_pokeapi_data(poke["id"])
+    api_data = fetch_pokeapi_data(poke["id"], quiet=quiet)
     if api_data:
         details.update(api_data)
         stats = api_data["stats"]

@@ -18,7 +18,6 @@ from rich.align import Align
 
 from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_COLORS, TYPE_CN_TO_EN_MAP
 from poketypes import ConfigDict, GuessRecord, HintRecord, PokemonEntry
-import data as _data
 from data import get_pokemon_details, fetch_species_data, build_pokemon_index
 from config import load_config, save_config
 from comparison import compare_pokemon, compute_remaining_pool
@@ -295,7 +294,6 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         _console.print("[red]请至少选择一个世代！[/red]")
         return
 
-    _data.QUIET = True
     target = random.choice(pool)
     target_details: PokemonEntry = cast(PokemonEntry, dict(target))
     _target_done = threading.Event()
@@ -306,9 +304,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         nonlocal target_details, _target_status, _target_error
         try:
             enriched = cast(PokemonEntry, get_pokemon_details(
-                cast(dict[str, object], target)))
+                cast(dict[str, object], target), quiet=True))
             species = cast(dict[str, object] | None,
-                           fetch_species_data(target["id"]))
+                           fetch_species_data(target["id"], quiet=True))
             if species:
                 enriched["egg_groups"] = cast(list[str], species.get("egg_groups", []))
                 cr = species.get("capture_rate")
@@ -422,10 +420,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         guessed_names.add(guess["name"])
         with _console.status("[dim]🔄 获取中...[/dim]", spinner="dots"):
             guess_details = cast(PokemonEntry, get_pokemon_details(
-                cast(dict[str, object], guess)))
+                cast(dict[str, object], guess), quiet=True))
         if config.get("show_egg_group"):
             guess_species = cast(dict[str, object] | None,
-                                 fetch_species_data(guess["id"]))
+                                 fetch_species_data(guess["id"], quiet=True))
             if guess_species:
                 guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
         _target_done.wait(timeout=8)

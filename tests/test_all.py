@@ -945,14 +945,14 @@ def _mock_game_env(monkeypatch, pokemon_list, target, inputs, tmp_path):
     monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
     monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
 
-    def _fake_details(poke):
+    def _fake_details(poke, **kwargs):
         d = dict(poke)
         d.update({"stat_total": 300, "speed": 90, "hp": 45, "attack": 50,
                    "defense": 40, "sp_attack": 60, "sp_defense": 50,
                    "height": 40, "weight": 60, "stats": {}})
         return d
     monkeypatch.setattr("game.get_pokemon_details", _fake_details)
-    monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+    monkeypatch.setattr("game.fetch_species_data", lambda _id, **kw: None)
 
     config = dict(DEFAULT_CONFIG)
     _game.run_game(pokemon_list, config)
@@ -995,8 +995,8 @@ class TestRunGame:
         monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
         monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
         monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
-        monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
-        monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+        monkeypatch.setattr("game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("game.fetch_species_data", lambda _id, **kw: None)
         _game.run_game(pokemon_list, {**DEFAULT_CONFIG, "max_guesses": 15})
         assert stat_calls[-1] == (False, 15)
 
@@ -1028,6 +1028,6 @@ class TestRunGame:
 
         monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
         monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
-        monkeypatch.setattr("game.get_pokemon_details", lambda p: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
-        monkeypatch.setattr("game.fetch_species_data", lambda _id: None)
+        monkeypatch.setattr("game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("game.fetch_species_data", lambda _id, **kw: None)
         _game.run_game(pokemon_list, config)
