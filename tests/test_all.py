@@ -728,6 +728,50 @@ class TestDataMocked:
 
 
 # ══════════════════════════════════════════════
+#  Test: ascii_art.py
+# ══════════════════════════════════════════════
+
+class TestAsciiArt:
+    def test_get_sprite_path_no_cache_no_download(self, monkeypatch, tmp_path):
+        """没有缓存且关闭下载时，get_sprite_path 返回 None"""
+        # 使用不存在的缓存目录
+        monkeypatch.setattr(ascii_art, "_SPRITE_CACHE_DIR", str(tmp_path / "no_such_cache"))
+        monkeypatch.setattr(ascii_art, "_HAS_TERM_IMAGE", False)
+        result = ascii_art.get_sprite_path("Pikachu", 25)
+        assert result is None
+
+    def test_get_sprite_path_cached(self, tmp_path, monkeypatch):
+        """已有缓存文件时直接返回路径"""
+        cache_dir = str(tmp_path / "sprite_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        monkeypatch.setattr(ascii_art, "_SPRITE_CACHE_DIR", cache_dir)
+        # 创建一个假的缓存文件
+        cache_file = os.path.join(cache_dir, "25.png")
+        with open(cache_file, "wb") as f:
+            f.write(b"fake_png_data")
+        result = ascii_art.get_sprite_path("Pikachu", 25)
+        assert result == cache_file
+
+    def test_get_sprite_path_empty_name_no_id(self):
+        """name_en 不在内存缓存且无 pokemon_id 时返回 None"""
+        result = ascii_art.get_sprite_path("NotInCache", 0)
+        assert result is None
+
+    def test_show_sprite_no_term_image(self, monkeypatch):
+        """term-image 不可用时 show_sprite 返回 False"""
+        monkeypatch.setattr(ascii_art, "_HAS_TERM_IMAGE", False)
+        result = ascii_art.show_sprite("Pikachu", 25)
+        assert result is False
+
+    def test_show_sprite_no_sprite_found(self, monkeypatch, tmp_path):
+        """精灵图不存在时 show_sprite 返回 False"""
+        monkeypatch.setattr(ascii_art, "_HAS_TERM_IMAGE", True)
+        monkeypatch.setattr(ascii_art, "_SPRITE_CACHE_DIR", str(tmp_path / "empty_cache"))
+        result = ascii_art.show_sprite("NoSuchPokemon", 99999)
+        assert result is False
+
+
+# ══════════════════════════════════════════════
 #  Test: game.py run_game
 # ══════════════════════════════════════════════
 

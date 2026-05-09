@@ -448,7 +448,14 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 ),
                 "🏆 You Win!",
             )
-            save_game_stats(True, len(guesses_with_hints))
+            gen_short = GEN_MAP.get(target["generation"], ("", 0))[0]
+            share_text = format_share_result(
+                guesses_with_hints, max_guesses,
+                target["name"], target["name_en"], target["id"],
+                won=True, generation_label=gen_short,
+            )
+            _console.print(Panel(share_text, border_style="dim", title="📋 分享结果"))
+            _safe_save_stats(True, len(guesses_with_hints))
             return
 
         if len(guesses_with_hints) >= max_guesses:
@@ -457,7 +464,14 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 "[bold red]😢 游戏结束！[/bold red]",
                 "💀 Game Over",
             )
-            save_game_stats(False, len(guesses_with_hints))
+            gen_short = GEN_MAP.get(target["generation"], ("", 0))[0]
+            share_text = format_share_result(
+                guesses_with_hints, max_guesses,
+                target["name"], target["name_en"], target["id"],
+                won=False, generation_label=gen_short,
+            )
+            _console.print(Panel(share_text, border_style="dim", title="📋 分享结果"))
+            _safe_save_stats(False, len(guesses_with_hints))
             return
 
 

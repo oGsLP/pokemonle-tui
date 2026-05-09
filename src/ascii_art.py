@@ -4,7 +4,9 @@
 """
 from __future__ import annotations
 
+import logging
 import os
+import sys
 import ssl
 import urllib.error
 import urllib.request
@@ -16,6 +18,13 @@ try:
     _HAS_TERM_IMAGE = True
 except ImportError:
     _HAS_TERM_IMAGE = False
+
+try:
+    from rich.console import Console
+except ImportError:
+    Console = None  # type: ignore[assignment]
+
+_logger = logging.getLogger(__name__)
 
 # 图片缓存目录
 _SPRITE_CACHE_DIR: str = os.path.join(
@@ -108,7 +117,7 @@ def get_sprite_path(name_en: str, pokemon_id: int = 0) -> Optional[str]:
 
 
 def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
-                crop_ratio: float = 0.10, h_align: str = "left",
+                crop_ratio: float = 0.05, h_align: str = "left",
                 v_align: Optional[str] = None) -> bool:
     """在终端中直接渲染展示宝可梦精灵图
 
@@ -118,7 +127,7 @@ def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
         name_en: 宝可梦英文名
         pokemon_id: PokeAPI 编号
         max_width: 最大渲染宽度（字符数）
-        crop_ratio: 四边裁剪比例，默认 0.10 即各裁 10%
+        crop_ratio: 四边裁剪比例，默认 0.05 即各裁 5%
         h_align: 水平对齐，默认 "left"（居左）
         v_align: 垂直对齐，默认 None（当前位置显示）
 
@@ -126,10 +135,12 @@ def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
         是否成功展示
     """
     if not _HAS_TERM_IMAGE:
+        _logger.warning("term-image 未安装，无法渲染精灵图")
         return False
 
     sprite_path = get_sprite_path(name_en, pokemon_id)
     if not sprite_path:
+        _logger.warning("未找到精灵图: %s (#%d)", name_en, pokemon_id)
         return False
 
     try:
@@ -151,7 +162,10 @@ def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
             pad_height=1,
             scroll=True,
         )
-        print()  # Add newline after image to prevent text from appearing on the same line
+        if Console is not None:
+            Console().print()  # Rich 换行，避免与 TUI 渲染冲突
+        else:
+            sys.stdout.write("\n")
         return True
     except Exception:
         return False

@@ -4,16 +4,13 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
+# IDE
+.vscode/
+
 # PokeAPI cache (fetched at runtime)
 .pokeapi_cache/
 .sprite_cache/
 
-# User-local data
-.game_config.json
-.game_stats.json
-.pokemonsay/
-pixel/
-.venv/
 
 # User-local data
 .game_config.json
