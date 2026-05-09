@@ -64,7 +64,7 @@ def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
         if normalized_en:
             index[normalized_en] = pokemon
 
-        normalized_jp = pokemon.get("name_jp", "").lower()
+        normalized_jp = pokemon.get("_name_jp_norm", pokemon.get("name_jp", "").lower())
         if normalized_jp:
             index[normalized_jp] = pokemon
 
