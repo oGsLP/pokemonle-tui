@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import ssl
+import sys
+import threading
 import urllib.error
 import urllib.request
 from typing import Optional
@@ -47,18 +48,10 @@ _SPRITE_URL_TEMPLATE = (
 # ══════════════════════════════════════════════
 
 def _download_sprite(pokemon_id: int) -> Optional[str]:
-    """从 PokeAPI 下载精灵图，返回本地缓存路径
-
-    优先从本地缓存读取，否则从 GitHub 下载并缓存
-    """
+    """从 PokeAPI 下载精灵图到缓存（在后台线程中运行）"""
     os.makedirs(_SPRITE_CACHE_DIR, exist_ok=True)
     cache_path = os.path.join(_SPRITE_CACHE_DIR, f"{pokemon_id}.png")
 
-    # 检查缓存
-    if os.path.exists(cache_path):
-        return cache_path
-
-    # 下载
     url = _SPRITE_URL_TEMPLATE.format(pokemon_id=pokemon_id)
     try:
         ctx = ssl.create_default_context()
@@ -68,7 +61,6 @@ def _download_sprite(pokemon_id: int) -> Optional[str]:
     except (urllib.error.URLError, OSError, ValueError):
         return None
 
-    # 缓存
     try:
         with open(cache_path, "wb") as f:
             f.write(data)
@@ -76,6 +68,13 @@ def _download_sprite(pokemon_id: int) -> Optional[str]:
         return None
 
     return cache_path
+
+
+def _download_sprite_async(pokemon_id: int) -> threading.Thread:
+    """在后台线程中下载精灵图，避免阻塞主线程"""
+    t = threading.Thread(target=_download_sprite, args=(pokemon_id,), daemon=True)
+    t.start()
+    return t
 
 
 # ══════════════════════════════════════════════
@@ -106,12 +105,9 @@ def get_sprite_path(name_en: str, pokemon_id: int = 0) -> Optional[str]:
             _cache[name_en] = sprite_path
             return sprite_path
 
-    # 2) 自动下载
+    # 2) 触发后台异步下载（不阻塞）
     if pokemon_id > 0 and _HAS_TERM_IMAGE:
-        sprite_path = _download_sprite(pokemon_id)
-        if sprite_path:
-            _cache[name_en] = sprite_path
-            return sprite_path
+        _download_sprite_async(pokemon_id)
 
     return None
 

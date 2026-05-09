@@ -24,6 +24,8 @@ def load_pokemon_data() -> List[Dict]:
     except json.JSONDecodeError as exc:
         raise ValueError(f"宝可梦数据文件 JSON 格式无效: {DATA_FILE} ({exc})") from exc
 
+    if not isinstance(raw, list):
+        raise ValueError(f"宝可梦数据文件 JSON 格式无效 — 预期列表: {DATA_FILE}")
     if not raw:
         print(f"警告: 宝可梦数据为空: {DATA_FILE}", file=sys.stderr)
 
@@ -123,12 +125,17 @@ def fetch_pokeapi_data(poke_id: int, *, quiet: bool = False) -> Optional[Dict]:
     url = f"https://pokeapi.co/api/v2/pokemon/{poke_id}"
 
     def _extract(data: dict) -> dict:
-        return {
-            "height": data["height"],
-            "weight": data["weight"],
-            "stats": {s["stat"]["name"]: s["base_stat"] for s in data["stats"]},
-            "abilities": [a["ability"]["name"] for a in data["abilities"]],
-        }
+        try:
+            return {
+                "height": data["height"],
+                "weight": data["weight"],
+                "stats": {s["stat"]["name"]: s["base_stat"] for s in data["stats"]},
+                "abilities": [a["ability"]["name"] for a in data["abilities"]],
+            }
+        except (KeyError, TypeError) as exc:
+            if not quiet:
+                print(f"  ⚠ PokeAPI 响应结构异常 ({label}): 缺少字段 {exc}", file=sys.stderr)
+            return {}
 
     return _cached_or_fetch(cache_file, url, _extract, f"宝可梦 #{poke_id}", quiet=quiet)
 
@@ -139,10 +146,15 @@ def fetch_species_data(poke_id: int, *, quiet: bool = False) -> Optional[Dict]:
     url = f"https://pokeapi.co/api/v2/pokemon-species/{poke_id}"
 
     def _extract(data: dict) -> dict:
-        return {
-            "egg_groups": [group["name"] for group in data.get("egg_groups", [])],
-            "capture_rate": data.get("capture_rate"),
-        }
+        try:
+            return {
+                "egg_groups": [group["name"] for group in data.get("egg_groups", [])],
+                "capture_rate": data.get("capture_rate"),
+            }
+        except (KeyError, TypeError) as exc:
+            if not quiet:
+                print(f"  ⚠ PokeAPI species 响应结构异常 ({label}): {exc}", file=sys.stderr)
+            return {}
 
     return _cached_or_fetch(cache_file, url, _extract, f"species #{poke_id}", quiet=quiet)
 
