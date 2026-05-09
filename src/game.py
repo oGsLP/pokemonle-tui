@@ -300,9 +300,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     target_details: PokemonEntry = cast(PokemonEntry, dict(target))
     _target_done = threading.Event()
     _target_status: str = "loading"
+    _target_error: str = ""
 
     def _fetch_target() -> None:
-        nonlocal target_details, _target_status
+        nonlocal target_details, _target_status, _target_error
         try:
             enriched = cast(PokemonEntry, get_pokemon_details(
                 cast(dict[str, object], target)))
@@ -314,8 +315,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 enriched["capture_rate"] = int(cr) if cr is not None else 0
             target_details = enriched
             _target_status = "done"
-        except Exception:
+        except Exception as exc:
             _target_status = "error"
+            _target_error = str(exc)
         finally:
             _target_done.set()
 
@@ -349,6 +351,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     ))
     with _console.status("[dim]🔄 获取中...[/dim]", spinner="dots"):
         _target_done.wait(timeout=8)
+    if _target_status == "error":
+        _console.print(f"[yellow]⚠ 获取目标宝可梦详情失败，提示可能不完整[/yellow]")
+    elif _target_status == "loading":
+        _console.print(f"[yellow]⚠ 目标宝可梦详情加载超时，提示可能不完整[/yellow]")
 
     while len(guesses_with_hints) < max_guesses:
         remaining = max_guesses - len(guesses_with_hints)
