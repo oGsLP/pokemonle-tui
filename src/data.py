@@ -55,7 +55,8 @@ def build_pokemon_index(pokemon_list: List[Dict]) -> Dict:
     """构建宝可梦快速索引，支持 id / 中文名 / 英文名 / 日文名 查找"""
     index: Dict = {}
     for pokemon in pokemon_list:
-        index[pokemon["id"]] = pokemon
+        # ID → first entry wins (original forms appear before regional variants)
+        index.setdefault(pokemon["id"], pokemon)
         index[pokemon["name"]] = pokemon
 
         normalized_en = pokemon["name_en"].lower().replace("-", "").replace(" ", "")
