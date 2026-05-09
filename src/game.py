@@ -356,10 +356,11 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     elif _target_status == "loading":
         _console.print(f"[yellow]⚠ 目标宝可梦详情加载超时，提示可能不完整[/yellow]")
 
+    _cached_pool_remaining: int = len(pool)
+
     while len(guesses_with_hints) < max_guesses:
         remaining = max_guesses - len(guesses_with_hints)
-        pool_remaining = compute_remaining_pool(pool, guesses_with_hints, config)
-        session.message = f"\n🔮 还剩 {remaining}/{max_guesses} 次 | 🎯 剩余 {pool_remaining} 只 | 猜: "
+        session.message = f"\n🔮 还剩 {remaining}/{max_guesses} 次 | 🎯 剩余 {_cached_pool_remaining} 只 | 猜: "
 
         try:
             guess_input = session.prompt()
@@ -422,10 +423,11 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         with _console.status("[dim]🔄 获取中...[/dim]", spinner="dots"):
             guess_details = cast(PokemonEntry, get_pokemon_details(
                 cast(dict[str, object], guess)))
+        if config.get("show_egg_group"):
             guess_species = cast(dict[str, object] | None,
                                  fetch_species_data(guess["id"]))
-        if guess_species:
-            guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
+            if guess_species:
+                guess_details["egg_groups"] = cast(list[str], guess_species.get("egg_groups", []))
         _target_done.wait(timeout=8)
         hints = list(compare_pokemon(target_details, guess_details, config))
 
@@ -439,9 +441,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                 hints[idx] = Hint(label, val, level, "↑" if arrow == "↓" else "↓")
 
         guesses_with_hints.append((guess, hints))
+        _cached_pool_remaining = compute_remaining_pool(pool, guesses_with_hints, config)
         _console.print()
         show_hints_table(guesses_with_hints, max_guesses, config,
-                         pool_size=compute_remaining_pool(pool, guesses_with_hints, config))
+                         pool_size=_cached_pool_remaining)
 
         if guess["id"] == target["id"]:
             elapsed = time.time() - start_time
