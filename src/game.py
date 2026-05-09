@@ -11,7 +11,7 @@ import time
 from rich.panel import Panel
 
 from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint
-from poketypes import ConfigDict, GuessRecord, PokemonEntry, PokemonData
+from poketypes import ConfigDict, GuessRecord, PokemonEntry
 from data import get_pokemon_details, fetch_species_data, build_pokemon_index
 from config import load_config, save_config
 from comparison import compare_pokemon
@@ -40,7 +40,7 @@ def _safe_save_stats(won: bool, guesses: int) -> None:
 
 
 def compute_remaining_pool(
-    pool: list[PokemonData],
+    pool: list[PokemonEntry],
     guesses_with_hints: list[GuessRecord],
     config: ConfigDict,
 ) -> int:

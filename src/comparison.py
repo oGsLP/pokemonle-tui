@@ -6,7 +6,8 @@ from typing import Callable
 
 import constants
 from constants import GEN_MAP, Hint
-from poketypes import ConfigDict, GuessRecord, PokemonData
+from poketypes import ConfigDict, GuessRecord, PokemonEntry
+
 
 GAME_MODE_PRESETS: dict[str, dict[str, int]] = constants.GAME_MODE_PRESETS  # type: ignore[assignment]
 
@@ -32,7 +33,7 @@ def _compare_stat(
         return Hint(label, display, "far", arrow)
 
 
-def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict) -> list[Hint]:
+def compare_pokemon(target: PokemonEntry, guess: PokemonEntry, config: ConfigDict) -> list[Hint]:
     hints: list[Hint] = []
     mode = config.get("game_mode", "normal")
     if not isinstance(mode, str):
@@ -135,7 +136,7 @@ def compare_pokemon(target: PokemonData, guess: PokemonData, config: ConfigDict)
 
 
 def compute_remaining_pool(
-    pool: list[PokemonData],
+    pool: list[PokemonEntry],
     guesses_with_hints: list[GuessRecord],
     config: ConfigDict,
 ) -> int:

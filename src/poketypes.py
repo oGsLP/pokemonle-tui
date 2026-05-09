@@ -56,9 +56,6 @@ class PokemonEntry(TypedDict, total=False):
 
 # ── Legacy type aliases (for backward compatibility during migration) ──
 
-# Used by comparison.py: target/guess dictionaries
-PokemonData = PokemonEntry
-
 # Config dictionary (settings keys → values)
 ConfigDict = dict[str, object]
 

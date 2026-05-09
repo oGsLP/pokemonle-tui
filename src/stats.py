@@ -39,25 +39,21 @@ def save_game_stats(won: bool, num_guesses: int, path: str | None = None) -> Non
     """保存一局游戏的结果（含连胜追踪）"""
     if path is None:
         path = constants.STATS_FILE
+
+    stats = _load_stats(path)
+    stats["total"] += 1
+    if won:
+        stats["wins"] = stats.get("wins", 0) + 1
+        stats["current_streak"] = stats.get("current_streak", 0) + 1
+        stats["best_streak"] = max(stats.get("best_streak", 0), stats["current_streak"])
+    else:
+        stats["current_streak"] = 0
+    stats.setdefault("guesses_history", []).append(num_guesses)
+
     try:
-        with open(path, "a+") as f:
+        with open(path, "w") as f:
             if _HAS_FCNTL:
                 fcntl.flock(f, fcntl.LOCK_EX)
-            f.seek(0)
-            try:
-                stats = json.load(f) if os.path.getsize(path) > 0 else _default_stats()
-            except json.JSONDecodeError:
-                stats = _default_stats()
-            stats["total"] += 1
-            if won:
-                stats["wins"] = stats.get("wins", 0) + 1
-                stats["current_streak"] = stats.get("current_streak", 0) + 1
-                stats["best_streak"] = max(stats.get("best_streak", 0), stats["current_streak"])
-            else:
-                stats["current_streak"] = 0
-            stats.setdefault("guesses_history", []).append(num_guesses)
-            f.seek(0)
-            f.truncate()
             json.dump(stats, f, ensure_ascii=False)
     except OSError:
         print(f"警告: 无法保存游戏统计: {path}", file=sys.stderr)
