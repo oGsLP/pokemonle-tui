@@ -25,6 +25,7 @@ from comparison import compare_pokemon, compute_remaining_pool
 from fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
 from stats import save_game_stats, get_stats_summary
 from share import format_share_result
+from ascii_art import show_sprite
 
 try:
     from prompt_toolkit import PromptSession
@@ -251,6 +252,29 @@ def show_settings(config: ConfigDict) -> ConfigDict:
                 cfg[toggle_keys[idx]] = not cfg.get(toggle_keys[idx], False)
 
 
+def _show_pokemon_art(name_en: str, pokemon_id: int) -> None:
+    """在终端显示宝可梦精灵图（使用 term-image 渲染）"""
+    show_sprite(name_en, pokemon_id)
+
+
+def _show_answer(target: PokemonEntry, preamble: str, style: str) -> None:
+    """统一展示答案 + 宝可梦像素画
+    
+    Args:
+        target: 目标宝可梦
+        preamble: 前置文本（已含 Rich markup）
+        style: Panel 样式 (border_style, title)
+    """
+    _console.print(Panel(
+        (
+            f"{preamble}\n\n"
+            f"  答案: [bold]{target['name']}[/bold] ({target['name_en']}) #{target['id']:04d}"
+        ),
+        border_style="dim", title=style,
+    ))
+    _show_pokemon_art(target["name_en"], target["id"])
+
+
 # ══════════════════════════════════════════════
 #  核心游戏
 # ══════════════════════════════════════════════
@@ -334,9 +358,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         try:
             guess_input = session.prompt()
         except (KeyboardInterrupt, EOFError):
-            _console.print(
-                f"\n[dim]退出。答案是 [bold]{target['name']}[/bold] "
-                f"({target['name_en']}, #{target['id']:04d})[/dim]"
+            _show_answer(
+                target,
+                "[dim]退出[/dim]",
+                "👋 再见",
             )
             _safe_save_stats(False, len(guesses_with_hints))
             return
@@ -346,17 +371,19 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
             continue
 
         if guess_input.lower() in ("q", "quit"):
-            _console.print(
-                f"\n[yellow]退出。答案是 [bold]{target['name']}[/bold] "
-                f"({target['name_en']}, #{target['id']:04d})[/yellow]"
+            _show_answer(
+                target,
+                "[yellow]退出[/yellow]",
+                "👋 再见",
             )
             _safe_save_stats(False, len(guesses_with_hints))
             return
 
         if guess_input.lower() == "reveal":
-            _console.print(
-                f"\n[yellow]答案是 [bold]{target['name']}[/bold] "
-                f"({target['name_en']}, #{target['id']:04d})[/yellow]"
+            _show_answer(
+                target,
+                "[yellow]揭晓答案[/yellow]",
+                "🔍 Reveal",
             )
             _safe_save_stats(False, len(guesses_with_hints))
             return
@@ -412,40 +439,38 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
         if guess["id"] == target["id"]:
             elapsed = time.time() - start_time
-            _console.print(Panel(
+            _show_answer(
+                target,
                 (
-                    f"[bold green]🎉 猜对了！[/bold green]\n\n"
-                    f"  答案: [bold]{target['name']}[/bold] ({target['name_en']}) #{target['id']:04d}\n"
+                    f"[bold green]🎉 猜对了！[/bold green]\n"
                     f"  用了 [bold yellow]{len(guesses_with_hints)}[/bold yellow] 次\n"
                     f"  耗时 [bold cyan]{elapsed:.0f}[/bold cyan] 秒"
                 ),
-                border_style="dim", title="🏆 You Win!",
-            ))
-            gen_short = GEN_MAP.get(target.get("generation", ""), ("",))[0]
+                "🏆 You Win!",
+            )
+            gen_short = GEN_MAP.get(target["generation"], ("", 0))[0]
             share_text = format_share_result(
                 guesses_with_hints, max_guesses,
-                target["name"], target["name_en"], target["id"], True,
-                gen_short,
+                target["name"], target["name_en"], target["id"],
+                won=True, generation_label=gen_short,
             )
-            _console.print(Panel(share_text, border_style="dim", title="📤 分享结果"))
+            _console.print(Panel(share_text, border_style="dim", title="📋 分享结果"))
             _safe_save_stats(True, len(guesses_with_hints))
             return
 
         if len(guesses_with_hints) >= max_guesses:
-            _console.print(Panel(
-                (
-                    f"[bold red]😢 游戏结束！[/bold red]\n\n"
-                    f"  答案是: [bold]{target['name']}[/bold] ({target['name_en']}) #{target['id']:04d}"
-                ),
-                border_style="dim", title="💀 Game Over",
-            ))
-            gen_short = GEN_MAP.get(target.get("generation", ""), ("",))[0]
+            _show_answer(
+                target,
+                "[bold red]😢 游戏结束！[/bold red]",
+                "💀 Game Over",
+            )
+            gen_short = GEN_MAP.get(target["generation"], ("", 0))[0]
             share_text = format_share_result(
                 guesses_with_hints, max_guesses,
-                target["name"], target["name_en"], target["id"], False,
-                gen_short,
+                target["name"], target["name_en"], target["id"],
+                won=False, generation_label=gen_short,
             )
-            _console.print(Panel(share_text, border_style="dim", title="📤 分享结果"))
+            _console.print(Panel(share_text, border_style="dim", title="📋 分享结果"))
             _safe_save_stats(False, len(guesses_with_hints))
             return
 
