@@ -254,7 +254,7 @@ def show_settings(config: ConfigDict) -> ConfigDict:
 
 def _show_pokemon_art(name_en: str, pokemon_id: int) -> None:
     """在终端显示宝可梦精灵图（使用 term-image 渲染）"""
-    show_sprite(name_en, pokemon_id)
+    show_sprite(name_en, pokemon_id, console=_console)
 
 
 def _show_answer(target: PokemonEntry, preamble: str, style: str) -> None:

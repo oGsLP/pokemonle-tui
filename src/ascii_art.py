@@ -118,7 +118,7 @@ def get_sprite_path(name_en: str, pokemon_id: int = 0) -> Optional[str]:
 
 def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
                 crop_ratio: float = 0.05, h_align: str = "left",
-                v_align: Optional[str] = None) -> bool:
+                v_align: Optional[str] = None, console=None) -> bool:
     """在终端中直接渲染展示宝可梦精灵图
 
     展示前会对图片进行裁剪，去掉四周空白区域。
@@ -130,6 +130,7 @@ def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
         crop_ratio: 四边裁剪比例，默认 0.05 即各裁 5%
         h_align: 水平对齐，默认 "left"（居左）
         v_align: 垂直对齐，默认 None（当前位置显示）
+        console: Rich Console 实例，用于换行（避免新建实例导致输出流不一致）
 
     Returns:
         是否成功展示
@@ -162,8 +163,10 @@ def show_sprite(name_en: str, pokemon_id: int = 0, max_width: int = 40,
             pad_height=1,
             scroll=True,
         )
-        if Console is not None:
-            Console().print()  # Rich 换行，避免与 TUI 渲染冲突
+        if console is not None:
+            console.print()
+        elif Console is not None:
+            Console().print()
         else:
             sys.stdout.write("\n")
         return True
