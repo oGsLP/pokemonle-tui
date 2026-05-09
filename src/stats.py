@@ -13,7 +13,7 @@ except ImportError:
     fcntl = None  # type: ignore[assignment]
     _HAS_FCNTL = False
 
-import constants
+from . import constants
 
 
 def _default_stats() -> dict:

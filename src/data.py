@@ -10,8 +10,8 @@ import urllib.error
 import urllib.request
 from typing import Callable, Dict, List, Optional
 
-from constants import DATA_FILE, CACHE_DIR
-from poketypes import PokemonEntry
+from .constants import DATA_FILE, CACHE_DIR
+from .poketypes import PokemonEntry
 
 
 def load_pokemon_data() -> list[PokemonEntry]:

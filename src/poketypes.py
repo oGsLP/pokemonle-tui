@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import NotRequired, Required, TypedDict
 
-from constants import Hint
+from .constants import Hint
 
 
 class PokemonEntry(TypedDict, total=False):

@@ -4,9 +4,9 @@
 
 from typing import Callable
 
-import constants
-from constants import GEN_MAP, Hint
-from poketypes import ConfigDict, GuessRecord, PokemonEntry
+from . import constants
+from .constants import GEN_MAP, Hint
+from .poketypes import ConfigDict, GuessRecord, PokemonEntry
 
 
 GAME_MODE_PRESETS: dict[str, dict[str, int]] = constants.GAME_MODE_PRESETS  # type: ignore[assignment]

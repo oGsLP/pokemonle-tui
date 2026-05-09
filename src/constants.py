@@ -3,7 +3,7 @@
 """
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
-from paths import PROJECT_DIR, DATA_FILE, CACHE_DIR, STATS_FILE, CONFIG_FILE  # noqa: F401
+from .paths import PROJECT_DIR, DATA_FILE, CACHE_DIR, STATS_FILE, CONFIG_FILE  # noqa: F401
 
 
 class Hint(NamedTuple):

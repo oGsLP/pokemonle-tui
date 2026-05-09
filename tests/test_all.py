@@ -6,29 +6,24 @@
 import json
 import os
 import random
-import sys
 import pytest
 
-# 确保 src/ 在 path 里 (必须在 import src 之前)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-# 统一导入 — 所有模块内部也是 import constants，保持引用一致
-import constants
-from constants import (
+import src.constants as constants
+from src.constants import (
     PROJECT_DIR, DATA_FILE, CACHE_DIR,
     Hint, TYPE_COLORS, GEN_MAP, ALL_GENERATIONS, GAME_MODE_PRESETS, DEFAULT_CONFIG,
 )
-from data import load_pokemon_data, build_pokemon_index, fetch_pokeapi_data, fetch_species_data, get_pokemon_details
-from config import load_config, save_config, _validate_config
-from comparison import compare_pokemon, compute_remaining_pool
-from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon, PokemonTrie
-from stats import save_game_stats, get_stats_summary, _load_stats, _build_distribution
-from game import _format_hint, _safe_save_stats, _show_answer
-from share import format_share_result
-import share
-import data as _data
-import ascii_art
-import game
+from src.data import load_pokemon_data, build_pokemon_index, fetch_pokeapi_data, fetch_species_data, get_pokemon_details
+from src.config import load_config, save_config, _validate_config
+from src.comparison import compare_pokemon, compute_remaining_pool
+from src.fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon, PokemonTrie
+from src.stats import save_game_stats, get_stats_summary, _load_stats, _build_distribution
+from src.game import _format_hint, _safe_save_stats, _show_answer
+from src.share import format_share_result
+import src.share as share
+import src.data as _data
+import src.ascii_art as ascii_art
+import src.game as game
 
 
 # ══════════════════════════════════════════════
@@ -662,7 +657,7 @@ class TestFuzzyCached:
 class TestDataMocked:
     def test_fetch_pokeapi_mock(self, monkeypatch, tmp_path):
         import urllib.request as _ur
-        import data as _data
+        import src.data as _data
 
         cache_dir = str(tmp_path / "mock_cache")
         monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
@@ -693,7 +688,7 @@ class TestDataMocked:
 
     def test_fetch_pokeapi_http_error(self, monkeypatch, tmp_path):
         import urllib.request as _ur
-        import data as _data
+        import src.data as _data
 
         cache_dir = str(tmp_path / "mock_cache2")
         monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
@@ -716,7 +711,7 @@ class TestDataMocked:
         assert result is None
 
     def test_cached_or_fetch_uses_cache(self, monkeypatch, tmp_path):
-        import data as _data
+        import src.data as _data
 
         cache_dir = str(tmp_path / "mock_cache3")
         monkeypatch.setattr(_data, "CACHE_DIR", cache_dir)
@@ -1008,14 +1003,14 @@ class TestComparisonEdgeCases:
 
 class TestShowAnswer:
     def test_no_crash_with_valid_pokemon(self, pokemon_25, monkeypatch):
-        monkeypatch.setattr("ui._show_pokemon_art", lambda *a: None)
-        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("src.ui._show_pokemon_art", lambda *a: None)
+        monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: None)
         _show_answer(pokemon_25, "test", "Test")
         assert True
 
     def test_no_crash_with_special_chars(self, pokemon_25, monkeypatch):
-        monkeypatch.setattr("ui._show_pokemon_art", lambda *a: None)
-        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("src.ui._show_pokemon_art", lambda *a: None)
+        monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: None)
         _show_answer(pokemon_25, "[bold green]🎉 猜对了！[/bold green]", "🏆")
         assert True
 
@@ -1114,11 +1109,11 @@ class TestDownloadSprite:
 
 class TestMain:
     def test_quit_exits(self, monkeypatch, pokemon_list):
-        monkeypatch.setattr("game.show_logo", lambda: None)
-        monkeypatch.setattr("game.load_config", lambda: dict(DEFAULT_CONFIG))
-        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
-        monkeypatch.setattr("ui._console.input", lambda *a, **kw: "q")
-        monkeypatch.setattr("data.load_pokemon_data", lambda: pokemon_list)
+        monkeypatch.setattr("src.game.show_logo", lambda: None)
+        monkeypatch.setattr("src.game.load_config", lambda: dict(DEFAULT_CONFIG))
+        monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("src.ui._console.input", lambda *a, **kw: "q")
+        monkeypatch.setattr("src.data.load_pokemon_data", lambda: pokemon_list)
 
         try:
             game.main()
@@ -1127,15 +1122,15 @@ class TestMain:
 
     def test_chooses_game(self, monkeypatch, pokemon_list):
         inputs = ["1", "q"]
-        monkeypatch.setattr("game.show_logo", lambda: None)
-        monkeypatch.setattr("game.load_config", lambda: dict(DEFAULT_CONFIG))
-        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
-        monkeypatch.setattr("data.load_pokemon_data", lambda: pokemon_list)
+        monkeypatch.setattr("src.game.show_logo", lambda: None)
+        monkeypatch.setattr("src.game.load_config", lambda: dict(DEFAULT_CONFIG))
+        monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("src.data.load_pokemon_data", lambda: pokemon_list)
 
         def fake_input(prompt=""):
             return inputs.pop(0)
-        monkeypatch.setattr("ui._console.input", fake_input)
-        monkeypatch.setattr("game.run_game", lambda pl, cfg: None)
+        monkeypatch.setattr("src.ui._console.input", fake_input)
+        monkeypatch.setattr("src.game.run_game", lambda pl, cfg: None)
 
         try:
             game.main()
@@ -1189,14 +1184,14 @@ class _FakeSession:
 
 
 def _mock_game_env(monkeypatch, pokemon_list, target, inputs, tmp_path):
-    import game as _game
+    import src.game as _game
 
     stats_file = str(tmp_path / "stats.json")
     monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(inputs))
     monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
     monkeypatch.setattr("random.choice", lambda s: target)
-    monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
-    monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
+    monkeypatch.setattr("src.game._console.print", lambda *a, **kw: None)
+    monkeypatch.setattr("src.game.show_hints_table", lambda *a, **kw: None)
 
     def _fake_details(poke, **kwargs):
         d = dict(poke)
@@ -1204,8 +1199,8 @@ def _mock_game_env(monkeypatch, pokemon_list, target, inputs, tmp_path):
                    "defense": 40, "sp_attack": 60, "sp_defense": 50,
                    "height": 40, "weight": 60, "stats": {}})
         return d
-    monkeypatch.setattr("game.get_pokemon_details", _fake_details)
-    monkeypatch.setattr("game.fetch_species_data", lambda _id, **kw: None)
+    monkeypatch.setattr("src.game.get_pokemon_details", _fake_details)
+    monkeypatch.setattr("src.game.fetch_species_data", lambda _id, **kw: None)
 
     config = dict(DEFAULT_CONFIG)
     _game.run_game(pokemon_list, config)
@@ -1214,47 +1209,47 @@ def _mock_game_env(monkeypatch, pokemon_list, target, inputs, tmp_path):
 class TestRunGame:
     def test_win_on_exact_match(self, monkeypatch, pokemon_list, tmp_path):
         stat_calls = []
-        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
         target = pokemon_list[0]
         _mock_game_env(monkeypatch, pokemon_list, target, ["妙蛙种子"], tmp_path)
         assert stat_calls == [(True, 1)]
 
     def test_quit_saves_loss(self, monkeypatch, pokemon_list, tmp_path):
         stat_calls = []
-        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
         target = pokemon_list[0]
         _mock_game_env(monkeypatch, pokemon_list, target, ["q"], tmp_path)
         assert stat_calls == [(False, 0)]
 
     def test_reveal_saves_loss(self, monkeypatch, pokemon_list, tmp_path):
         stat_calls = []
-        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
         target = pokemon_list[0]
         _mock_game_env(monkeypatch, pokemon_list, target, ["reveal"], tmp_path)
         assert stat_calls == [(False, 0)]
 
     def test_lose_on_max_guesses(self, monkeypatch, pokemon_list, tmp_path):
         stat_calls = []
-        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
 
         target = pokemon_list[0]
         all_pokemon = [p["name"] for p in pokemon_list if p["id"] != target["id"]]
         bad_guesses = all_pokemon[:15]
 
-        import game as _game
+        import src.game as _game
         monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(bad_guesses))
         monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
         monkeypatch.setattr("random.choice", lambda s: target)
-        monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
-        monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
-        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
-        monkeypatch.setattr("game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
-        monkeypatch.setattr("game.fetch_species_data", lambda _id, **kw: None)
+        monkeypatch.setattr("src.game._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("src.game.show_hints_table", lambda *a, **kw: None)
+        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("src.game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("src.game.fetch_species_data", lambda _id, **kw: None)
         _game.run_game(pokemon_list, {**DEFAULT_CONFIG, "max_guesses": 15})
         assert stat_calls[-1] == (False, 15)
 
     def test_empty_pool_returns_early(self, monkeypatch, pokemon_list, tmp_path):
-        import game as _game
+        import src.game as _game
         config = {**DEFAULT_CONFIG, "generations": []}
         monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession([]))
         monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
@@ -1262,25 +1257,25 @@ class TestRunGame:
 
     def test_not_found_then_quit(self, monkeypatch, pokemon_list, tmp_path):
         stat_calls = []
-        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
         target = pokemon_list[0]
         _mock_game_env(monkeypatch, pokemon_list, target, ["zzzz_not_found", "q"], tmp_path)
         assert len(stat_calls) > 0
 
     def test_mischief_mode_no_crash(self, monkeypatch, pokemon_list, tmp_path):
         stat_calls = []
-        monkeypatch.setattr("game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
+        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: stat_calls.append((w, g)))
         target = pokemon_list[0]
         config = {**DEFAULT_CONFIG, "mischief": True, "max_guesses": 15}
-        import game as _game
+        import src.game as _game
         monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: _FakeSession(["皮卡丘", "q"]))
         monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
 
         real_choice = random.choice
         monkeypatch.setattr("random.choice", lambda s: target if isinstance(s[0], dict) else real_choice(s))
 
-        monkeypatch.setattr("game._console.print", lambda *a, **kw: None)
-        monkeypatch.setattr("game.show_hints_table", lambda *a, **kw: None)
-        monkeypatch.setattr("game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
-        monkeypatch.setattr("game.fetch_species_data", lambda _id, **kw: None)
+        monkeypatch.setattr("src.game._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("src.game.show_hints_table", lambda *a, **kw: None)
+        monkeypatch.setattr("src.game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
+        monkeypatch.setattr("src.game.fetch_species_data", lambda _id, **kw: None)
         _game.run_game(pokemon_list, config)

@@ -1,4 +1,4 @@
-from poketypes import GuessRecord
+from .poketypes import GuessRecord
 
 
 def format_share_result(

@@ -7,9 +7,9 @@ from collections import deque
 
 from typing import Any, override
 
-from constants import GEN_MAP, TYPE_COLORS, TYPE_CN_TO_EN_MAP
-from data import build_pokemon_index
-from poketypes import PokemonEntry
+from .constants import GEN_MAP, TYPE_COLORS, TYPE_CN_TO_EN_MAP
+from .data import build_pokemon_index
+from .poketypes import PokemonEntry
 
 
 class _TrieNode:

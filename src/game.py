@@ -10,16 +10,16 @@ import time
 
 from rich.panel import Panel
 
-from constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint
-from poketypes import ConfigDict, GuessRecord, PokemonEntry
-from data import get_pokemon_details, fetch_species_data, build_pokemon_index
-from config import load_config, save_config
-from comparison import compare_pokemon
-from fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
-from stats import save_game_stats, get_stats_summary
-from share import format_share_result
-from ui import _format_hint, show_hints_table, show_logo, show_game_stats, show_settings, _show_answer
-import ui as _ui
+from .constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint
+from .poketypes import ConfigDict, GuessRecord, PokemonEntry
+from .data import get_pokemon_details, fetch_species_data, build_pokemon_index
+from .config import load_config, save_config
+from .comparison import compare_pokemon
+from .fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
+from .stats import save_game_stats, get_stats_summary
+from .share import format_share_result
+from .ui import _format_hint, show_hints_table, show_logo, show_game_stats, show_settings, _show_answer
+from . import ui as _ui
 
 try:
     from prompt_toolkit import PromptSession
@@ -281,7 +281,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
 def main() -> None:
     """程序主入口"""
-    from data import load_pokemon_data
+    from .data import load_pokemon_data
 
     show_logo()
     _console.print("[dim]正在加载宝可梦数据...[/dim]")
@@ -303,7 +303,7 @@ def main() -> None:
     )
     _console.print(f"[dim]{gen_info}[/dim]")
 
-    from constants import CACHE_DIR
+    from .constants import CACHE_DIR
     cached = 0
     if os.path.isdir(CACHE_DIR):
         cached = len([f for f in os.listdir(CACHE_DIR) if f.endswith(".json")])
