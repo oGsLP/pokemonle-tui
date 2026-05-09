@@ -23,10 +23,12 @@ from config import load_config, save_config, _validate_config
 from comparison import compare_pokemon, compute_remaining_pool
 from fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon, PokemonTrie
 from stats import save_game_stats, get_stats_summary, _load_stats, _build_distribution
-from game import _format_hint, _safe_save_stats
+from game import _format_hint, _safe_save_stats, _show_answer
 from share import format_share_result
 import share
+import data as _data
 import ascii_art
+import game
 
 
 # ══════════════════════════════════════════════
@@ -999,7 +1001,177 @@ class TestComparisonEdgeCases:
         id_hint = next(h for h in hints if h.label == "编号")
         assert len(id_hint) == 4
 
-import game
+
+# ══════════════════════════════════════════════
+#  Test: game.py _show_answer
+# ══════════════════════════════════════════════
+
+class TestShowAnswer:
+    def test_no_crash_with_valid_pokemon(self, pokemon_25, monkeypatch):
+        monkeypatch.setattr("ui._show_pokemon_art", lambda *a: None)
+        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
+        _show_answer(pokemon_25, "test", "Test")
+        assert True
+
+    def test_no_crash_with_special_chars(self, pokemon_25, monkeypatch):
+        monkeypatch.setattr("ui._show_pokemon_art", lambda *a: None)
+        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
+        _show_answer(pokemon_25, "[bold green]🎉 猜对了！[/bold green]", "🏆")
+        assert True
+
+
+# ══════════════════════════════════════════════
+#  Test: data.py _cached_or_fetch
+# ══════════════════════════════════════════════
+
+class TestCachedOrFetch:
+    def test_uses_cache_when_exists(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(_data, "CACHE_DIR", str(tmp_path))
+        os.makedirs(tmp_path, exist_ok=True)
+
+        cache_file = os.path.join(str(tmp_path), "test_cache.json")
+        expected = {"key": "cached_value"}
+        with open(cache_file, "w") as f:
+            json.dump(expected, f)
+
+        result = _data._cached_or_fetch(cache_file, "http://no", lambda d: d, "test")
+        assert result == expected
+
+    def test_fetches_when_no_cache(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        monkeypatch.setattr(_data, "CACHE_DIR", str(tmp_path))
+        os.makedirs(tmp_path, exist_ok=True)
+
+        class FakeResponse:
+            status = 200
+            def read(self):
+                return json.dumps({"fetched": True}).encode()
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+
+        monkeypatch.setattr(_ur, "urlopen", lambda *a, **kw: FakeResponse())
+        result = _data._cached_or_fetch(
+            os.path.join(str(tmp_path), "new.json"),
+            "http://test", lambda d: d, "test", quiet=True,
+        )
+        assert result == {"fetched": True}
+
+    def test_returns_none_on_http_error(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        monkeypatch.setattr(_data, "CACHE_DIR", str(tmp_path))
+        os.makedirs(tmp_path, exist_ok=True)
+
+        class FakeError:
+            status = 404
+            def read(self): return b""
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+
+        monkeypatch.setattr(_ur, "urlopen", lambda *a, **kw: FakeError())
+        result = _data._cached_or_fetch(
+            os.path.join(str(tmp_path), "err.json"),
+            "http://test", lambda d: d, "test", quiet=True,
+        )
+        assert result is None
+
+
+# ══════════════════════════════════════════════
+#  Test: ascii_art.py _download_sprite
+# ══════════════════════════════════════════════
+
+class TestDownloadSprite:
+    def test_returns_none_on_network_error(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        from urllib.error import URLError
+        monkeypatch.setattr(ascii_art, "_SPRITE_CACHE_DIR", str(tmp_path))
+
+        def fake_urlopen(*a, **kw):
+            raise URLError("network down")
+
+        monkeypatch.setattr(_ur, "urlopen", fake_urlopen)
+        result = ascii_art._download_sprite(25)
+        assert result is None
+
+    def test_caches_downloaded_file(self, monkeypatch, tmp_path):
+        import urllib.request as _ur
+        cache_dir = str(tmp_path / "sprites")
+        monkeypatch.setattr(ascii_art, "_SPRITE_CACHE_DIR", cache_dir)
+
+        class FakeResponse:
+            def read(self): return b"fake_png"
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+
+        monkeypatch.setattr(_ur, "urlopen", lambda *a, **kw: FakeResponse())
+        result = ascii_art._download_sprite(25)
+        assert result == os.path.join(cache_dir, "25.png")
+        assert os.path.exists(result)
+
+
+# ══════════════════════════════════════════════
+#  Test: main menu loop
+# ══════════════════════════════════════════════
+
+class TestMain:
+    def test_quit_exits(self, monkeypatch, pokemon_list):
+        monkeypatch.setattr("game.show_logo", lambda: None)
+        monkeypatch.setattr("game.load_config", lambda: dict(DEFAULT_CONFIG))
+        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("ui._console.input", lambda *a, **kw: "q")
+        monkeypatch.setattr("data.load_pokemon_data", lambda: pokemon_list)
+
+        try:
+            game.main()
+        except SystemExit:
+            pass
+
+    def test_chooses_game(self, monkeypatch, pokemon_list):
+        inputs = ["1", "q"]
+        monkeypatch.setattr("game.show_logo", lambda: None)
+        monkeypatch.setattr("game.load_config", lambda: dict(DEFAULT_CONFIG))
+        monkeypatch.setattr("ui._console.print", lambda *a, **kw: None)
+        monkeypatch.setattr("data.load_pokemon_data", lambda: pokemon_list)
+
+        def fake_input(prompt=""):
+            return inputs.pop(0)
+        monkeypatch.setattr("ui._console.input", fake_input)
+        monkeypatch.setattr("game.run_game", lambda pl, cfg: None)
+
+        try:
+            game.main()
+        except (SystemExit, IndexError):
+            pass
+
+
+# ══════════════════════════════════════════════
+#  Test: integration
+# ══════════════════════════════════════════════
+
+class TestIntegration:
+    def test_load_and_compare_roundtrip(self, pokemon_list):
+        assert len(pokemon_list) > 1000
+        pikachu = next(p for p in pokemon_list if p["id"] == 25)
+        assert pikachu["name"] == "皮卡丘"
+        assert pikachu["types"] == ["电"]
+        hints = compare_pokemon(pikachu, pikachu, dict(DEFAULT_CONFIG))
+        labels = {h.label for h in hints}
+        assert "编号" in labels
+        assert "属性" in labels
+        assert "世代" in labels
+
+    def test_find_and_compare(self, pokemon_list):
+        target = next(p for p in pokemon_list if p["id"] == 25)
+        guess = find_pokemon("皮卡丘", pokemon_list)
+        assert guess is not None
+        assert guess["id"] == 25
+        hints = compare_pokemon(target, guess, dict(DEFAULT_CONFIG))
+        assert len(hints) > 0
+
+    def test_build_index_and_lookup(self, pokemon_list):
+        idx = build_pokemon_index(pokemon_list)
+        assert idx[25]["name"] == "皮卡丘"
+        assert idx["pikachu"]["id"] == 25
+        assert idx["皮卡丘"]["id"] == 25
 
 
 class _FakeSession:
