@@ -1,8 +1,9 @@
 """
 常量定义 — 属性映射、世代映射、默认配置、路径
 """
-import os
 from typing import Dict, List, NamedTuple, Optional, Tuple
+
+from paths import PROJECT_DIR, DATA_FILE, CACHE_DIR, STATS_FILE, CONFIG_FILE  # noqa: F401
 
 
 class Hint(NamedTuple):
@@ -10,13 +11,6 @@ class Hint(NamedTuple):
     value: str
     level: str
     arrow: Optional[str] = None
-
-# ── 路径: 项目根目录 = src/ 的父目录 ──
-PROJECT_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_FILE: str = os.path.join(PROJECT_DIR, "pokemon_full_list.json")
-CACHE_DIR: str = os.path.join(PROJECT_DIR, ".pokeapi_cache")
-STATS_FILE: str = os.path.join(PROJECT_DIR, ".game_stats.json")
-CONFIG_FILE: str = os.path.join(PROJECT_DIR, ".game_config.json")
 
 # ── 属性中文→英文映射 ──
 TYPE_CN_TO_EN_MAP: Dict[str, str] = {
