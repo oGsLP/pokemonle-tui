@@ -49,6 +49,7 @@ def save_game_stats(won: bool, num_guesses: int, path: str | None = None) -> Non
     else:
         stats["current_streak"] = 0
     stats.setdefault("guesses_history", []).append(num_guesses)
+    stats["guesses_history"] = stats["guesses_history"][-1000:]
 
     try:
         with open(path, "w") as f:
