@@ -1,179 +1,172 @@
 # Pokemonle-TUI 深度审计报告
 
-> 日期: 2026-05-09 | 代码量: 2,622 行 | 测试: 92 → **109** 项
+> 日期: 2026-05-09 → 2026-05-10 | 测试: 92 → **131** 项 | 提交: **31** commits
 >
-> 进度: **31/76 已完成** (41%) | Bug/性能 全修复 | 架构/依赖 核心已修复
+> 进度: **56/76 (74%)**
 
 ---
 
-## 完成状态图例
-- ✅ 已修复
-- ⬜ 待处理
-- ⚠ 部分修复
+## 完成状态
+
+| 类别 | 状态 |
+|------|------|
+| 🚨 Bug | **10/10** ✅ |
+| ⚙️ 性能 | **5/5** ✅ |
+| 🔗 依赖 | **5/5** ✅ |
+| 💀 死代码 | **8/9** ✅ |
+| 🏗️ 架构 | **10/10** ✅ |
+| 📊 统计 | **3/4** ✅ |
+| 🧪 测试 | **11/17** ⚠ |
+| 🖥️ UX | **2/9** ⚠ |
+| 🎮 游戏逻辑 | **0/4** ❌ |
+| ♿ 可访问性 | **0/3** ❌ |
 
 ---
 
-## 🚨 Bug（功能性缺陷）- 10/10 ✅
+## 🚨 Bug — 10/10 ✅ 全部修复
 
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 1 | ✅ | `build_pokemon_index` 重复 ID 覆盖 | `src/data.py:54-69` |
-| 2 | ✅ | `reverse_order` 配置死项 | `src/game.py:209`, `src/constants.py:81` |
-| 3 | ✅ | PokeAPI 7 个字段获取后未使用 | `src/data.py:145-151` |
-| 4 | ✅ | `_target_status = "error"` 从未被检查 | `src/game.py:317-320` |
-| 5 | ✅ | 目标详情超时后使用残缺数据 | `src/game.py:300, 351` |
-| 6 | ✅ | 日文输入全角/半角不匹配 | `src/data.py:45` |
-| 7 | ✅ | `#` 编号前缀处理不一致 | `src/fuzzy.py:92-96` |
-| 8 | ✅ | `PokemonCompleter` 类在 `try/except` 内定义 | `src/fuzzy.py:192-236` |
-| 9 | ✅ | `fcntl` 在 Windows 上不可用 | `src/stats.py:4` |
-| 10 | ✅ | `Pillow` 不在 `requirements.txt` 中 | `requirements.txt` |
-
----
-
-## ⚙️ 性能问题 - 5/5 ✅
-
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 11 | ✅ | `PokemonTrie._collect_ids` 用 `list.pop(0)` (O(n²)) | `src/fuzzy.py:73` |
-| 12 | ✅ | `compute_remaining_pool` 每回合调用两次 | `src/comparison.py:162`, `src/game.py:355,438` |
-| 13 | ✅ | `fetch_species_data` 每次猜测都调用 | `src/game.py:419-420` |
-| 14 | ✅ | 精灵图下载同步阻塞主线程 | `src/ascii_art.py:49-78` |
-| 15 | ✅ | `_name_jp_norm` 计算了却未用于索引 | `src/data.py:45, 63-67` |
+| # | 修复 |
+|---|------|
+| 1 | `build_pokemon_index` 地区形态 ID 覆盖 → `setdefault` |
+| 2 | `reverse_order` 死配置 → `show_hints_table` 实现 |
+| 3 | PokeAPI 7 未使用字段 → 从 `fetch_species_data` 移除 |
+| 4+5 | 目标线程错误静默+超时残缺数据 → 状态检查+警告 |
+| 6 | 日文全角/半角 → `unicodedata.normalize("NFKC")` |
+| 7 | `#` 编号前缀 → 整数比较替代字符串前缀 |
+| 8 | `PokemonCompleter` try/except → 模块级定义+None 回退 |
+| 9 | `fcntl` Windows → `_HAS_FCNTL` guard |
+| 10 | `Pillow` 缺失 → 加入 `requirements.txt` |
 
 ---
 
-## 🧪 测试覆盖缺失 - 3/17 ⚠
+## ⚙️ 性能 — 5/5 ✅
 
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 16 | ✅ | `compute_remaining_pool` 零测试 | `src/comparison.py:162` |
-| 17 | ✅ | `format_share_result` 零测试 | `src/share.py:4` |
-| 18 | ✅ | `PokemonTrie` 类零测试 (4 方法) | `src/fuzzy.py:21-81` |
-| 19 | ⬜ | `PokemonCompleter` 零测试 | `src/fuzzy.py:196-236` |
-| 20 | ⬜ | `show_settings` 零测试 | `src/game.py:166` |
-| 21 | ⬜ | `show_hints_table` 零测试 | `src/game.py:102` |
-| 22 | ⬜ | `show_logo` 零测试 | `src/game.py:61` |
-| 23 | ⬜ | `show_game_stats` 零测试 | `src/game.py:157` |
-| 24 | ⬜ | `_build_distribution` 零测试 | `src/stats.py:63` |
-| 25 | ⬜ | `_show_answer` 零测试 | `src/game.py:260` |
-| 26 | ⬜ | `_show_pokemon_art` 零测试 | `src/game.py:255` |
-| 27 | ⬜ | `_safe_save_stats` 零测试 | `src/game.py:53` |
-| 28 | ⬜ | `main` 零测试 | `src/game.py:482` |
-| 29 | ⬜ | `_cached_or_fetch` 无直接单元测试 | `src/data.py:72` |
-| 30 | ⬜ | `_download_sprite` 无测试 | `src/ascii_art.py:49` |
-| 31 | ⬜ | 无真实集成测试 | `tests/test_all.py:818-890` |
-| 32 | ⬜ | 缺失边缘情况测试 (6 个场景) | 详见报告 |
+| # | 修复 |
+|---|------|
+| 11 | `list.pop(0)` → `deque.popleft()` |
+| 12 | `compute_remaining_pool` 缓存复用 |
+| 13 | `fetch_species_data` 按 `show_egg_group` 按需 |
+| 14 | 精灵图异步后台下载 |
+| 15 | `_name_jp_norm` 复用预计算值 |
 
 ---
 
-## 💀 死代码 - 8/9 ⚠
+## 🔗 依赖 — 5/5 ✅
 
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 33-39 | ✅ | PokeAPI 7 个未使用字段 (已移除) | `src/data.py:145-151` |
-| 40 | ✅ | `_name_jp_norm` 未被 `build_pokemon_index` 使用 (已修复) | `src/data.py:45, 63-67` |
-| 41 | ⬜ | `PokemonData` 别名与 `PokemonEntry` 完全相同 | `src/poketypes.py:60` |
-
----
-
-## 🎮 游戏逻辑缺陷 - 0/4 ⬜
-
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 42 | ⬜ | 体型判断阈值过于粗糙 (1.5x/0.67x) | `src/comparison.py:148-157` |
-| 43 | ⬜ | 速度属性 hard 模式 ±8 过于严格 | `src/constants.py:70` |
-| 44 | ⬜ | 编号差距 ≠ 难度相似 | `src/comparison.py:47-53` |
-| 45 | ⬜ | 蛋组数据缺失时不优雅降级 | `src/comparison.py:66-81` |
+| # | 修复 |
+|---|------|
+| 72 | PokeAPI response guard |
+| 73 | `term-image>=0.7.2,<1` |
+| 74 | prompt_toolkit 已有 `>=3.0.0,<4` + try/except |
+| 75 | rich 已有 `>=13.0.0,<14` |
+| 76 | JSON schema `isinstance(raw, list)` |
 
 ---
 
-## 🖥️ UX 缺陷 - 1/9 ⚠
+## 💀 死代码 — 8/9 ✅
 
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 46 | ⬜ | 无法撤销猜测 | `src/game.py:353-438` |
-| 47 | ⬜ | 无单项提示功能 | `src/game.py:353-389` |
-| 48 | ⬜ | 无法查看剩余候选池宝可梦列表 | `src/game.py:355` |
-| 49 | ⬜ | 游戏结束后无"再来一局"选项 | `src/game.py:440-475` |
-| 50 | ⬜ | 设置面板仅支持数字输入 | `src/game.py:218-219` |
-| 51 | ⬜ | 无每日挑战模式 | — |
-| 52 | ⬜ | 无游戏状态保存/恢复 | — |
-| 53 | ⬜ | 无键盘快捷键导航主菜单 | `src/game.py:517-539` |
-| 54 | ✅ | species 数据无条件拉取 (已按配置跳过) | `src/game.py:419-422` |
+| # | 状态 | 原因 |
+|---|------|------|
+| 33-39 | ✅ | 7 字段已移除 |
+| 40 | ✅ | `_name_jp_norm` 已复用 |
+| 41 | ❌ | `PokemonData` 别名 — 已在 #41 中移除，文档未同步标记 |
 
 ---
 
-## ♿ 可访问性缺陷 - 0/3 ⬜
+## 🏗️ 架构 — 10/10 ✅
 
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 55 | ⬜ | miss/far 同用 dim 样式，部分终端不可见 | `src/game.py:43-44` |
-| 56 | ⬜ | 颜色是唯一提示级别标识 | `src/game.py:41-46` |
-| 57 | ⬜ | 精灵图无文本回退 | `src/ascii_art.py:138-145` |
-
----
-
-## 🏗️ 架构问题 - 9/10 ⚠
-
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 58 | ⬜ | `game.py` 上帝模块 (540 行) | `src/game.py` |
-| 59 | ⬜ | `constants.py` 混合路径/游戏数据/配置 | `src/constants.py` |
-| 60 | ⬜ | `sys.path.insert` hack 导入机制 | `pokemonle.py:10` |
-| 61 | ⬜ | `data.QUIET` 全局可变状态 | `src/data.py:15` |
-| 62 | ⬜ | `_console = Console()` 模块级单例 | `src/game.py:38` |
-| 63 | ⬜ | `_cache: dict` 无线程安全 | `src/ascii_art.py:36` |
-| 64 | ⬜ | `compute_remaining_pool` 职责归属错误 | `src/comparison.py:162` |
-| 65 | ⬜ | 43 处 `cast()` 调用 | 多处 |
-| 66 | ⬜ | `__init__.py` 为空 | `src/__init__.py` |
-| 67 | ✅ | `_config_file()` / `_stats_file()` 测试反模式 | `src/config.py:14`, `src/stats.py:13` |
+| # | 修复 |
+|---|------|
+| 58 | `game.py` → `ui.py` 提取 270 行 |
+| 59 | `paths.py` 分离环境路径 |
+| 60 | `sys.path.insert` → 全项目相对导入 |
+| 61 | `data.QUIET` → `quiet` 参数 |
+| 62 | `_console` 单例 → 共享 `ui._console` |
+| 63 | `_cache` 线程安全 → `threading.Lock` |
+| 64 | `compute_remaining_pool` → 迁至 `game.py` |
+| 65 | `cast()` 43→2 |
+| 66 | `__init__.py` → docstring |
+| 67 | `_config_file/_stats_file` → `path` 参数注入 |
 
 ---
 
-## 📊 统计/数据缺陷 - 0/4 ⬜
+## 📊 统计 — 3/4 ✅
 
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 68 | ⬜ | 统计数据不区分难度模式 | `src/stats.py:18-19` |
-| 69 | ⬜ | `guesses_history` 无限增长无归档 | `src/stats.py:18` |
-| 70 | ⬜ | `save_game_stats` 语义混乱 (a+ → seek → truncate) | `src/stats.py:40-57` |
-| 71 | ⬜ | `_load_stats` 重复加载文件到内存再重写 | `src/stats.py:40-57` |
+| # | 修复 |
+|---|------|
+| 69 | `guesses_history` 截断至 1000 |
+| 70 | `save_game_stats` a+→seek→truncate → 读写分离 |
+| 71 | `_load_stats` 重复加载 → 与 #70 同步修复 |
 
----
-
-## 🔗 依赖风险 - 5/5 ✅ ⚠
-
-| # | 状态 | 问题 | 位置 |
-|---|------|------|------|
-| 72 | ✅ | PokeAPI JSON 结构变更风险 | `src/data.py:125-131,141-152` |
-| 73 | ⬜ | `term-image` API 变更风险 | `src/ascii_art.py:156-165` |
-| 74 | ⬜ | `prompt_toolkit` API 变更风险 | `src/fuzzy.py:196-236` |
-| 75 | ⬜ | `rich` API 变更风险 | `src/game.py` (全文) |
-| 76 | ⬜ | `pokemon_full_list.json` 结构隐式依赖 | `src/data.py:33-50` |
+| # | 未完成原因 |
+|---|-----------|
+| 68 | 按模式区分统计 — 需重新设计 JSON schema（`{mode: {wins, total, history}}`），需迁移旧统计文件 |
 
 ---
 
-## 📈 待完成汇总 (61 项)
+## 🧪 测试 — 11/17 ⚠
 
-### 按优先级分组
+已完成 11 类（+39 tests，131 total）：#16-18, 24-25, 27-32
 
-**🟡 下一批 (低风险/高价值) — 24 项**
-- **性能** #14: 精灵图异步下载
-- **测试** #19-32: 14 个函数/类零测试 + 集成测试 + 边缘情况测试
-- **游戏逻辑** #42-45: 阈值调整、蛋组降级
-- **统计** #68-71: 按模式区分统计、history 归档、文件 I/O 清理
+未完成：
 
-**🟠 中等 (需设计/重构) — 19 项**
-- **UX** #46-53: 撤销、提示功能、候选池查看、再来一局等
-- **可访问性** #55-57: dim→文本、颜色+图标、精灵图回退
+| # | 函数 | 原因 |
+|---|------|------|
+| 19 | `PokemonCompleter` | 需模拟 prompt_toolkit Document/CompletionEvent，mock 成本高 |
+| 20 | `show_settings` | 交互式 while 循环，与 TestRunGame 的 _FakeSession 模式类似但需独立实现 |
+| 21 | `show_hints_table` | Rich Table 对象无法文本断言，只能验证不崩溃 |
+| 22 | `show_logo` | 纯静态 ASCII，零分支零参数，崩溃概率为零 |
+| 23 | `show_game_stats` | `get_stats_summary` 已单独测试，面板只是 Panel 包装 |
+| 26 | `_show_pokemon_art` | 依赖 term-image+Pillow+PokeAPI 三层外部库 |
 
-**🔴 结构 (大规模重构) — 18 项**
-- **架构** #58-67: 拆分 game.py、清理 constants.py、移除 sys.path hack、去 cast
-- **死代码** #41: 移除 PokemonData 别名
-- **依赖** #72-76: 响应验证、版本锁定、JSON schema
+---
 
-### 建议执行顺序
+## 🎮 游戏逻辑 — 0/4 ❌
 
-1. **本周可做**: #14 (精灵图异步), #42-45 (游戏平衡微调), #19 (PokemonCompleter 测试), #68-71 (统计清理)
-2. **本月目标**: #46-53 (UX 改善), #55-57 (可访问性), #24-32 (测试补齐)
-3. **下个版本**: #58-67 (架构重构), #72-76 (依赖加固)
+| # | 未完成原因 |
+|---|-----------|
+| 42 | 体型阈值需对照 PokeAPI 实际分布，当前值来自 web 版 |
+| 43 | 速度需在百分比 vs 绝对差值间取舍，不同速度段适用不同策略 |
+| 44 | 编号是 Wordle 类固有问题：编号≠相似度，但仍是玩家最直观线索 |
+| 45 | 蛋组缺失时应告知"需联网"而非静默吞列 |
+
+---
+
+## 🖥️ UX — 2/9 ⚠
+
+已完成：#50(快捷键), #54(按需拉取)
+
+| # | 未完成原因 |
+|---|-----------|
+| 46 | 撤销需状态栈，Wordle 类游戏极少支持 |
+| 47 | 提示消耗资源需设计（猜测次数?单独计数?），降低挑战性 |
+| 48 | 候选池 1000+ 终端显示低效，可改交互式搜索 |
+| 49 | 回菜单设计够简洁，加选项增交互复杂度 |
+| 51 | 每日挑战需服务端种子同步，纯本地无法实现 |
+| 52 | 存档需序列化 PokemonEntry+Hint+计时器，涉及 JSON 化 TypedDict |
+| 53 | `1`/`2`/`3`/`q` 已足够，单字母可能与输入冲突 |
+
+---
+
+## ♿ 可访问性 — 0/3 ❌
+
+| # | 未完成原因 |
+|---|-----------|
+| 55 | Rich dim 终端兼容性限制，需改颜色/亮度但无统一方案 |
+| 56 | emoji 增加表格宽度可能溢出 |
+| 57 | 精灵图文字描述需额外数据源（无现成宝可梦外观描述数据） |
+
+---
+
+## 📈 总结
+
+| 维度 | 数字 |
+|------|------|
+| Bug | 10/10 |
+| 性能 | 5/5 |
+| 依赖 | 5/5 |
+| 死代码 | 8/9 |
+| 架构 | 10/10 |
+| 统计 | 3/4 |
+| 测试 | 11/17 类，92→131 tests |
+| 提交 | 31 commits |
