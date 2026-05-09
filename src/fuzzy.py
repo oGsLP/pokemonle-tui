@@ -201,6 +201,12 @@ def find_pokemon(query: str, pokemon_list: list[PokemonEntry], index: dict[objec
 try:
     from prompt_toolkit.completion import Completion, Completer
     from prompt_toolkit.formatted_text import FormattedText
+    _HAS_PROMPT_TOOLKIT = True
+except ImportError:
+    _HAS_PROMPT_TOOLKIT = False
+
+
+if _HAS_PROMPT_TOOLKIT:
 
     class PokemonCompleter(Completer):
         """prompt_toolkit 模糊补全器 — 输入时弹出候选列表"""
@@ -244,5 +250,5 @@ try:
                     display_meta=meta,
                 )
 
-except ImportError:
-    pass
+else:
+    PokemonCompleter = None  # type: ignore[assignment]
