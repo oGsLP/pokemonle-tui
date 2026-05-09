@@ -141,7 +141,7 @@ def show_settings(config: ConfigDict) -> ConfigDict:
             "easy": "简单模式 · 更宽松的提示范围和更多猜测次数",
         }.get(cfg.get("game_mode", "normal"), cfg.get("game_mode", "normal"))
         _console.print(f"\n  游戏模式: [yellow]{mode_display}[/yellow]")
-        _console.print("  [dim]  1=普通  2=困难  3=简单[/dim]")
+        _console.print("  [dim]  1=普通  2=困难  3=简单  (e=简单 h=困难)[/dim]")
 
         _console.print(f"\n  世代选择 (当前 {len(cfg.get('generations', []))} 代):")
         gen_labels = [
@@ -158,16 +158,16 @@ def show_settings(config: ConfigDict) -> ConfigDict:
 
         _console.print("\n  显示选项:")
         opts = [
-            ("show_more_stats", "显示更多种族值 (HP/攻击/防御/特攻/特防)"),
-            ("show_more_appearance", "显示更多外形信息 (体型比较)"),
-            ("show_egg_group", "显示蛋组/捕获率信息"),
-            ("show_gen_arrow", "开启世代箭头提示"),
-            ("reverse_order", "猜测反向显示 (最新在上)"),
-            ("mischief", "小小的恶作剧 (随机干扰提示)"),
+            ("show_more_stats", "显示更多种族值 (HP/攻击/防御/特攻/特防)", "m"),
+            ("show_more_appearance", "显示更多外形信息 (体型比较)", "p"),
+            ("show_egg_group", "显示蛋组/捕获率信息", "g"),
+            ("show_gen_arrow", "开启世代箭头提示", "r"),
+            ("reverse_order", "猜测反向显示 (最新在上)", "o"),
+            ("mischief", "小小的恶作剧 (随机干扰提示)", "i"),
         ]
-        for i, (key, label) in enumerate(opts, 1):
+        for i, (key, label, shortcut) in enumerate(opts, 1):
             mark = "[green]✓[/green]" if cfg.get(key) else "[red]✗[/red]"
-            _console.print(f"    {mark} {i}. {label}  [dim](t{i} 切换)[/dim]")
+            _console.print(f"    {mark} {i}. {label}  [dim]({shortcut} 切换)[/dim]")
 
         _console.print(f"\n  [cyan]a[/cyan]=全选世代  [cyan]n[/cyan]=取消全选  [cyan]s[/cyan]=保存  [cyan]q[/cyan]=取消")
 
@@ -193,6 +193,14 @@ def show_settings(config: ConfigDict) -> ConfigDict:
             cfg["game_mode"] = {"1": "normal", "2": "hard", "3": "easy"}[choice]
             preset = GAME_MODE_PRESETS.get(cfg["game_mode"], {})
             cfg["max_guesses"] = preset.get("default_guesses", cfg.get("max_guesses", 10))
+        elif choice == "e":
+            cfg["game_mode"] = "easy"
+            preset = GAME_MODE_PRESETS["easy"]
+            cfg["max_guesses"] = preset.get("default_guesses", cfg.get("max_guesses", 10))
+        elif choice == "h":
+            cfg["game_mode"] = "hard"
+            preset = GAME_MODE_PRESETS["hard"]
+            cfg["max_guesses"] = preset.get("default_guesses", cfg.get("max_guesses", 10))
         elif choice.isdigit() and 1 <= int(choice) <= 9:
             g = ALL_GENERATIONS[int(choice) - 1]
             gens = set(cfg.get("generations", ALL_GENERATIONS))
@@ -203,9 +211,13 @@ def show_settings(config: ConfigDict) -> ConfigDict:
             cfg["generations"] = list(gens)
         elif choice.startswith("t") and choice[1:].isdigit():
             idx = int(choice[1:]) - 1
-            toggle_keys = [k for k, _ in opts]
-            if 0 <= idx < len(toggle_keys):
-                cfg[toggle_keys[idx]] = not cfg.get(toggle_keys[idx], False)
+            if 0 <= idx < len(opts):
+                cfg[opts[idx][0]] = not cfg.get(opts[idx][0], False)
+        elif choice in ("m", "p", "g", "r", "o", "i"):
+            shortcut_map = {s: k for k, _, s in opts}
+            key = shortcut_map.get(choice)
+            if key:
+                cfg[key] = not cfg.get(key, False)
 
 
 def _show_pokemon_art(name_en: str, pokemon_id: int) -> None:
