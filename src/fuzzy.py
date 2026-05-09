@@ -90,11 +90,20 @@ def score_pokemon(query: str, p: PokemonEntry) -> int:
     poke_id = p.get("_id_str", str(p["id"]))
 
     # 编号精确匹配
-    if q == poke_id or q == f"#{poke_id}":
-        return 100
-    # 编号前缀
-    if poke_id.startswith(q.lstrip("#")) and len(q) >= 2:
-        return 90
+    q_stripped = q.lstrip("#")
+    try:
+        q_num = int(q_stripped)
+        if q_num == p["id"]:
+            return 100
+    except ValueError:
+        pass
+    q_num_digits = q_stripped
+    if q_num_digits.isdigit() and len(q_num_digits) >= 2:
+        try:
+            if str(p["id"]).startswith(q_num_digits):
+                return 90
+        except (ValueError, KeyError):
+            pass
     # 中文名精确
     if name_cn == q:
         return 100
