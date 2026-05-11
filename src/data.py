@@ -165,7 +165,6 @@ def get_pokemon_details(poke: PokemonEntry, *, quiet: bool = False) -> PokemonEn
     """获取宝可梦详细信息（基础数据 + PokeAPI 补充种族值/身高/体重）"""
     details: PokemonEntry = {**poke}  # type: ignore[typeddict-unknown-key]
     api_data = fetch_pokeapi_data(poke["id"], quiet=quiet)
-    api_data = fetch_pokeapi_data(poke["id"], quiet=quiet)
     if api_data:
         details.update(api_data)
         stats = api_data["stats"]

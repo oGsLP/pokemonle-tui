@@ -143,8 +143,7 @@ def compute_remaining_pool(
     """Count pool members consistent with all revealed hints.
 
     A candidate survives if, for every previous guess, comparing
-    guess → candidate produces the same hint levels as the actual
-    hints revealed to the player.
+    candidate → guess reproduces the actual hints revealed to the player.
     """
     if not guesses_with_hints:
         return len(pool)
@@ -153,14 +152,9 @@ def compute_remaining_pool(
     for candidate in pool:
         consistent = True
         for guess_poke, actual_hints in guesses_with_hints:
-            candidate_hints = compare_pokemon(guess_poke, candidate, config)
-            actual_levels = {h.label: h.level for h in actual_hints}
-            candidate_levels = {h.label: h.level for h in candidate_hints}
-            for label in actual_levels:
-                if label in candidate_levels and actual_levels[label] != candidate_levels[label]:
-                    consistent = False
-                    break
-            if not consistent:
+            candidate_hints = compare_pokemon(candidate, guess_poke, config)
+            if tuple(candidate_hints) != tuple(actual_hints):
+                consistent = False
                 break
         if consistent:
             surviving += 1

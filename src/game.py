@@ -14,7 +14,7 @@ from .constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint
 from .poketypes import ConfigDict, GuessRecord, PokemonEntry
 from .data import get_pokemon_details, fetch_species_data, build_pokemon_index
 from .config import load_config, save_config
-from .comparison import compare_pokemon
+from .comparison import compare_pokemon, compute_remaining_pool
 from .fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
 from .stats import save_game_stats, get_stats_summary
 from .share import format_share_result
@@ -39,42 +39,15 @@ def _safe_save_stats(won: bool, guesses: int) -> None:
         pass
 
 
-def compute_remaining_pool(
-    pool: list[PokemonEntry],
-    guesses_with_hints: list[GuessRecord],
-    config: ConfigDict,
-) -> int:
-    """Count pool members consistent with all revealed hints.
-
-    A candidate survives if, for every previous guess, comparing
-    guess → candidate produces the same hint levels as the actual
-    hints revealed to the player.
-    """
-    if not guesses_with_hints:
-        return len(pool)
-
-    surviving = 0
-    for candidate in pool:
-        consistent = True
-        for guess_poke, actual_hints in guesses_with_hints:
-            candidate_hints = compare_pokemon(guess_poke, candidate, config)
-            actual_levels = {h.label: h.level for h in actual_hints}
-            candidate_levels = {h.label: h.level for h in candidate_hints}
-            for label in actual_levels:
-                if label in candidate_levels and actual_levels[label] != candidate_levels[label]:
-                    consistent = False
-                    break
-            if not consistent:
-                break
-        if consistent:
-            surviving += 1
-
-    return surviving
-
-
 # ══════════════════════════════════════════════
 #  核心游戏
 # ══════════════════════════════════════════════
+
+def _format_remaining_pool_warning(pool_size: int) -> str:
+    if pool_size != 0:
+        return ""
+    return "⚠ 没有候选宝可梦完全匹配当前提示，可能是网络数据、设置项或谜题约束导致。"
+
 
 def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
     """运行一局游戏"""
@@ -153,7 +126,7 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
     while len(guesses_with_hints) < max_guesses:
         remaining = max_guesses - len(guesses_with_hints)
-        session.message = f"\n🔮 还剩 {remaining}/{max_guesses} 次 | 🎯 剩余 {_cached_pool_remaining} 只 | 猜: "
+        session.message = f"\n🔮 还剩 {remaining}/{max_guesses} 次 | 🎯 剩余 {_cached_pool_remaining} 只 | q=退出 reveal=看答案 | 猜: "
 
         try:
             guess_input = session.prompt()
@@ -233,6 +206,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
 
         guesses_with_hints.append((guess, hints))
         _cached_pool_remaining = compute_remaining_pool(pool, guesses_with_hints, config)
+        warning = _format_remaining_pool_warning(_cached_pool_remaining)
+        if warning:
+            _console.print(f"[yellow]{warning}[/yellow]")
         _console.print()
         show_hints_table(guesses_with_hints, max_guesses, config,
                          pool_size=_cached_pool_remaining)
