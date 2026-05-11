@@ -29,39 +29,6 @@ import src.ui as ui
 
 
 # ══════════════════════════════════════════════
-#  Fixtures
-# ══════════════════════════════════════════════
-
-@pytest.fixture(scope="session")
-def pokemon_list():
-    """加载完整宝可梦数据（整个测试会话共享）"""
-    return load_pokemon_data()
-
-
-@pytest.fixture
-def pokemon_25(pokemon_list):
-    """皮卡丘"""
-    return next(p for p in pokemon_list if p["id"] == 25)
-
-
-@pytest.fixture
-def pokemon_1(pokemon_list):
-    """妙蛙种子"""
-    return next(p for p in pokemon_list if p["id"] == 1)
-
-
-@pytest.fixture
-def pokemon_4(pokemon_list):
-    """小火龙"""
-    return next(p for p in pokemon_list if p["id"] == 4)
-
-
-@pytest.fixture
-def default_config():
-    return dict(DEFAULT_CONFIG)
-
-
-# ══════════════════════════════════════════════
 #  Test: constants.py
 # ══════════════════════════════════════════════
 
@@ -231,14 +198,13 @@ class TestConfig:
         finally:
             constants.CONFIG_FILE = old
 
-    def test_save_failure_raises(self, tmp_path):
-        """写入失败时应该抛出 OSError"""
+    def test_save_failure_returns_false(self, tmp_path):
+        """写入失败时应该返回 False，不中断设置流程"""
         old = constants.CONFIG_FILE
         try:
             bad_path = str(tmp_path / "nonexistent" / "config.json")
             constants.CONFIG_FILE = bad_path
-            with pytest.raises(OSError):
-                save_config({"game_mode": "easy"})
+            assert save_config({"game_mode": "easy"}) is False
         finally:
             constants.CONFIG_FILE = old
 

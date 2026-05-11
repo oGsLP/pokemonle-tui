@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+from collections.abc import Mapping
 from typing import cast
 
 from . import constants
@@ -20,7 +21,7 @@ def _validate_config(cfg: JsonObject) -> JsonObject:
             validated[k] = bool(val)
         elif isinstance(default, int):
             try:
-                validated[k] = int(val)
+                validated[k] = int(val) if isinstance(val, (int, float, str)) else default
             except (ValueError, TypeError):
                 validated[k] = default
         elif isinstance(default, list):
@@ -57,7 +58,7 @@ def load_config(path: str | None = None) -> dict[str, object]:
     return dict(constants.DEFAULT_CONFIG)
 
 
-def save_config(cfg: dict[str, object], path: str | None = None) -> None:
+def save_config(cfg: Mapping[str, object], path: str | None = None) -> bool:
     """保存游戏配置到文件"""
     if path is None:
         path = constants.CONFIG_FILE
@@ -66,4 +67,5 @@ def save_config(cfg: dict[str, object], path: str | None = None) -> None:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     except OSError as exc:
         print(f"警告: 无法保存配置文件: {exc}", file=sys.stderr)
-        raise
+        return False
+    return True

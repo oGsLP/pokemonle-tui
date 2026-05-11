@@ -188,10 +188,9 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         if choice == "q":
             return config
         elif choice == "s":
-            try:
-                save_config(cfg)
+            if save_config(cfg):
                 _console.print("[green]✅ 设置已保存[/green]")
-            except OSError:
+            else:
                 _console.print("[red]❌ 保存失败！[/red]")
             return cfg
         elif choice == "a":
