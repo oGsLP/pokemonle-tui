@@ -11,7 +11,7 @@ import time
 from rich.panel import Panel
 
 from .constants import ALL_GENERATIONS, GEN_MAP, Hint
-from .poketypes import ConfigDict, GuessRecord, PokemonEntry
+from .poketypes import ConfigDict, GuessRecord, HintRecord, PokemonEntry
 from .data import get_pokemon_details, fetch_species_data, build_pokemon_index
 from .config import load_config
 from .comparison import compare_pokemon, compute_remaining_pool
@@ -30,6 +30,51 @@ except ImportError:
 
 
 _console = _ui._console
+
+
+class _TargetDetailsPreloader:
+    def __init__(self, target: PokemonEntry) -> None:
+        self.details: PokemonEntry = target
+        self.status: str = "loading"
+        self.error: str = ""
+        self.done: threading.Event = threading.Event()
+        self._timed_out: bool = False
+
+    def fetch(self) -> None:
+        try:
+            enriched = get_pokemon_details(self.details, quiet=True)
+            species = fetch_species_data(self.details["id"], quiet=True)
+            if species:
+                egg_groups = species.get("egg_groups", [])
+                if isinstance(egg_groups, list):
+                    enriched["egg_groups"] = [str(group) for group in egg_groups]
+                cr = species.get("capture_rate")
+                enriched["capture_rate"] = int(cr) if cr is not None else 0
+            if not self._timed_out:
+                self.details = enriched
+                self.status = "done"
+        except Exception as exc:
+            if not self._timed_out:
+                self.status = "error"
+                self.error = str(exc)
+        finally:
+            self.done.set()
+
+    def start(self) -> threading.Thread:
+        thread = threading.Thread(target=self.fetch, daemon=True)
+        thread.start()
+        return thread
+
+    def wait(self, timeout: float) -> bool:
+        completed = self.done.wait(timeout=timeout)
+        if not completed:
+            self.mark_timed_out()
+        return completed
+
+    def mark_timed_out(self) -> None:
+        if self.status == "loading":
+            self.status = "timeout"
+        self._timed_out = True
 
 
 def _safe_save_stats(won: bool, guesses: int) -> None:
@@ -55,7 +100,8 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         _console.print("[red]缺少 prompt_toolkit，无法启动交互补全。[/red]")
         return
 
-    gen_filter = set(config.get("generations", []))
+    generations = config.get("generations", [])
+    gen_filter = set(generations) if isinstance(generations, list) else set()
     max_guesses_raw = config.get("max_guesses", 10)
     max_guesses = max(3, min(15, int(max_guesses_raw) if isinstance(max_guesses_raw, (int, float)) else 10))
 
@@ -66,29 +112,8 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         return
 
     target = random.choice(pool)
-    target_details: PokemonEntry = target
-    _target_done = threading.Event()
-    _target_status: str = "loading"
-    _target_error: str = ""
-
-    def _fetch_target() -> None:
-        nonlocal target_details, _target_status, _target_error
-        try:
-            enriched = get_pokemon_details(target, quiet=True)
-            species = fetch_species_data(target["id"], quiet=True)
-            if species:
-                enriched["egg_groups"] = species.get("egg_groups", [])
-                cr = species.get("capture_rate")
-                enriched["capture_rate"] = int(cr) if cr is not None else 0
-            target_details = enriched
-            _target_status = "done"
-        except Exception as exc:
-            _target_status = "error"
-            _target_error = str(exc)
-        finally:
-            _target_done.set()
-
-    threading.Thread(target=_fetch_target, daemon=True).start()
+    target_preloader = _TargetDetailsPreloader(target)
+    _ = target_preloader.start()
 
     guesses_with_hints: list[GuessRecord] = []
     guessed_names: set[str] = set()
@@ -116,10 +141,10 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         border_style="dim", title="🎯 猜猜看",
     ))
     with _console.status("[dim]🔄 获取中...[/dim]", spinner="dots"):
-        _target_done.wait(timeout=8)
-    if _target_status == "error":
+        _ = target_preloader.wait(timeout=8)
+    if target_preloader.status == "error":
         _console.print(f"[yellow]⚠ 获取目标宝可梦详情失败，提示可能不完整[/yellow]")
-    elif _target_status == "loading":
+    elif target_preloader.status == "timeout":
         _console.print(f"[yellow]⚠ 目标宝可梦详情加载超时，提示可能不完整[/yellow]")
 
     _cached_pool_remaining: int = len(pool)
@@ -191,9 +216,11 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
         if config.get("show_egg_group"):
             guess_species = fetch_species_data(guess["id"], quiet=True)
             if guess_species:
-                guess_details["egg_groups"] = guess_species.get("egg_groups", [])
-        _target_done.wait(timeout=8)
-        hints = list(compare_pokemon(target_details, guess_details, config))
+                egg_groups = guess_species.get("egg_groups", [])
+                if isinstance(egg_groups, list):
+                    guess_details["egg_groups"] = [str(group) for group in egg_groups]
+        _ = target_preloader.wait(timeout=8)
+        hints: list[HintRecord] = list(compare_pokemon(target_preloader.details, guess_details, config))
 
         # 小恶作剧模式
         if config.get("mischief") and hints:
@@ -201,8 +228,9 @@ def run_game(pokemon_list: list[PokemonEntry], config: ConfigDict) -> None:
                                 if len(h) == 4 and h[2] != "exact" and h[3] is not None]
             if mischief_indices:
                 idx = random.choice(mischief_indices)
-                label, val, level, arrow = hints[idx]
-                hints[idx] = Hint(label, val, level, "↑" if arrow == "↓" else "↓")
+                match hints[idx]:
+                    case (label, val, level, arrow):
+                        hints[idx] = Hint(label, val, level, "↑" if arrow == "↓" else "↓")
 
         guesses_with_hints.append((guess, hints))
         _cached_pool_remaining = compute_remaining_pool(pool, guesses_with_hints, config)

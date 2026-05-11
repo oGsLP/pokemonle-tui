@@ -292,3 +292,24 @@ class TestGamePromptPolish:
 
         assert "没有候选" in warning
         assert "网络数据" in warning or "谜题" in warning
+
+
+class TestTargetDetailsPreloader:
+    def test_late_result_is_ignored_after_timeout(self, monkeypatch):
+        target = _bulbasaur()
+        enriched = {**target, "stat_total": 999, "speed": 99}
+
+        monkeypatch.setattr(game, "get_pokemon_details", lambda poke, **kwargs: enriched)
+        monkeypatch.setattr(
+            game,
+            "fetch_species_data",
+            lambda pokemon_id, **kwargs: {"egg_groups": ["monster"], "capture_rate": 45},
+        )
+
+        preloader = game._TargetDetailsPreloader(target)
+        preloader.mark_timed_out()
+        preloader.fetch()
+
+        assert preloader.status == "timeout"
+        assert preloader.details is target
+        assert "egg_groups" not in preloader.details
