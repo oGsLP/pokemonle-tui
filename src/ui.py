@@ -6,9 +6,9 @@ from rich.text import Text
 from rich import box
 from rich.align import Align
 
-from .constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint, TYPE_COLORS, TYPE_CN_TO_EN_MAP
+from .constants import ALL_GENERATIONS, GAME_MODE_PRESETS, TYPE_COLORS, TYPE_CN_TO_EN_MAP
 from .poketypes import ConfigDict, GuessRecord, PokemonEntry
-from .config import load_config, save_config
+from .config import save_config
 from .stats import get_stats_summary
 from .ascii_art import show_sprite
 

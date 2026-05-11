@@ -10,15 +10,15 @@ import time
 
 from rich.panel import Panel
 
-from .constants import ALL_GENERATIONS, GAME_MODE_PRESETS, GEN_MAP, Hint
+from .constants import ALL_GENERATIONS, GEN_MAP, Hint
 from .poketypes import ConfigDict, GuessRecord, PokemonEntry
 from .data import get_pokemon_details, fetch_species_data, build_pokemon_index
-from .config import load_config, save_config
+from .config import load_config
 from .comparison import compare_pokemon, compute_remaining_pool
 from .fuzzy import find_pokemon, get_fuzzy_matches, PokemonCompleter
-from .stats import save_game_stats, get_stats_summary
+from .stats import save_game_stats
 from .share import format_share_result
-from .ui import _format_hint, show_hints_table, show_logo, show_game_stats, show_settings, _show_answer
+from .ui import show_hints_table, show_logo, show_game_stats, show_settings, _show_answer
 from . import ui as _ui
 
 try:
