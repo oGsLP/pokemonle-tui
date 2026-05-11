@@ -177,7 +177,7 @@ class TestLogoVersion:
         ui.show_logo()
         rendered = output.getvalue()
 
-        assert "0.2.2" in rendered
+        assert "0.2.3" in rendered
         assert "CLI v2" not in rendered
 
 
