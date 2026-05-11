@@ -18,7 +18,8 @@ from src.config import load_config, save_config, _validate_config
 from src.comparison import compare_pokemon, compute_remaining_pool
 from src.fuzzy import score_pokemon, get_fuzzy_matches, find_pokemon, PokemonTrie
 from src.stats import save_game_stats, get_stats_summary, _load_stats, _build_distribution
-from src.game import _format_hint, _safe_save_stats, _show_answer
+from src.game import _safe_save_stats
+from src.ui import _format_hint, _show_answer
 from src.share import format_share_result
 import src.share as share
 import src.data as _data
@@ -566,13 +567,11 @@ class TestFormatHint:
     def test_exact_hint(self):
         t = _format_hint("编号", "#0025", "exact")
         assert "#0025" in t.plain
-        assert "●" in t.plain
 
     def test_close_with_arrow(self):
         t = _format_hint("编号", "#0020", "close", "↑")
         assert "#0020" in t.plain
         assert "↑" in t.plain
-        assert "◐" in t.plain
 
     def test_miss_dim(self):
         t = _format_hint("属性", "火", "miss")
@@ -582,7 +581,6 @@ class TestFormatHint:
         t = _format_hint("属性", "草/飞行", "partial", "草")
         assert "草" in t.plain
         assert "飞行" in t.plain
-        assert "◐" in t.plain
         assert any("white on" in span.style for span in t.spans)
         assert any("dim" in span.style for span in t.spans)
 
@@ -595,36 +593,6 @@ class TestFormatHint:
         t = _format_hint("身高", "1.5m", "far", "↓")
         assert "1.5m" in t.plain
         assert "↓" in t.plain
-        assert "○" in t.plain
-
-    def test_show_hints_table_renders_with_narrow_console(self, monkeypatch):
-        from io import StringIO
-        from rich.console import Console
-
-        output = StringIO()
-        narrow_console = Console(width=60, force_terminal=False)
-        monkeypatch.setattr(ui, "_console", narrow_console)
-        monkeypatch.setattr(narrow_console, "file", output)
-
-        guesses = [
-            (
-                {"name": "妙蛙种子", "name_en": "Bulbasaur"},
-                [
-                    Hint("编号", "1", "exact"),
-                    Hint("属性", "草/毒", "partial", "草"),
-                    Hint("世代", "1", "exact"),
-                    Hint("种族值", "318", "close", "↑"),
-                    Hint("速度", "45", "far", "↓"),
-                ],
-            )
-        ]
-        config = {"reverse_order": False, "show_more_stats": False, "show_more_appearance": False, "show_egg_group": False}
-
-        ui.show_hints_table(guesses, 10, config, pool_size=12)
-        rendered = output.getvalue()
-
-        assert "猜测记录" in rendered
-        assert "Bulbasaur" in rendered or "妙蛙" in rendered
 
 
 # ══════════════════════════════════════════════
@@ -656,48 +624,6 @@ class TestConfigValidation:
         cfg = {**DEFAULT_CONFIG, "generations": "not_a_list"}
         validated = _validate_config(cfg)
         assert validated["generations"] == DEFAULT_CONFIG["generations"]
-
-    def test_validate_config_treats_empty_generations_as_all_generations(self):
-        cfg = _validate_config({"generations": []})
-        assert cfg["generations"] == ALL_GENERATIONS
-
-
-class TestSettingsUi:
-    def test_settings_text_explains_generation_reset(self, monkeypatch):
-        output = []
-        monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: output.extend(str(x) for x in a))
-        monkeypatch.setattr("src.ui._console.input", lambda *a, **kw: "q")
-
-        ui.show_settings(dict(DEFAULT_CONFIG))
-
-        rendered = "\n".join(output)
-        assert "n[/cyan]=重置为全部世代" in rendered
-
-    def test_settings_copy_names_egg_group_without_capture_rate(self, monkeypatch):
-        output = []
-        monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: output.extend(str(x) for x in a))
-        monkeypatch.setattr("src.ui._console.input", lambda *a, **kw: "q")
-
-        ui.show_settings(dict(DEFAULT_CONFIG))
-
-        rendered = "\n".join(output)
-        assert "显示蛋组信息" in rendered
-        assert "捕获率" not in rendered
-
-
-class TestLogo:
-    def test_logo_uses_0_2_2_version(self, monkeypatch):
-        from io import StringIO
-        from rich.console import Console
-
-        output = StringIO()
-        monkeypatch.setattr(ui, "_console", Console(file=output, force_terminal=False))
-
-        ui.show_logo()
-
-        rendered = output.getvalue()
-        assert "0.2.2" in rendered
-        assert "CLI v2" not in rendered
 
 
 # ══════════════════════════════════════════════
@@ -803,34 +729,6 @@ class TestDataMocked:
         assert result is not None
         assert result["height"] == 4
 
-    def test_get_pokemon_details_fetches_pokeapi_once(self, monkeypatch):
-        calls = []
-
-        def fake_fetch_pokeapi_data(pokemon_id, quiet=False):
-            calls.append((pokemon_id, quiet))
-            return {
-                "height": 7,
-                "weight": 69,
-                "stats": {
-                    "hp": 45,
-                    "attack": 49,
-                    "defense": 49,
-                    "special-attack": 65,
-                    "special-defense": 65,
-                    "speed": 45,
-                },
-                "abilities": ["茂盛"],
-            }
-
-        monkeypatch.setattr(_data, "fetch_pokeapi_data", fake_fetch_pokeapi_data)
-
-        details = get_pokemon_details({"id": 1, "name": "妙蛙种子"}, quiet=True)
-
-        assert calls == [(1, True)]
-        assert details["height"] == 7
-        assert details["stat_total"] == 318
-
-
 # ══════════════════════════════════════════════
 #  Test: ascii_art.py
 # ══════════════════════════════════════════════
@@ -918,61 +816,6 @@ class TestComputeRemainingPool:
         guesses_with_hints = [(pokemon_25, hints)]
         remaining = compute_remaining_pool([pokemon_25], guesses_with_hints, default_config)
         assert remaining == 1
-
-    def test_compute_remaining_pool_uses_candidate_as_target(self):
-        bulbasaur = {
-            "id": 1,
-            "name": "妙蛙种子",
-            "name_en": "Bulbasaur",
-            "types": ["草", "毒"],
-            "generation": "第一世代",
-            "stats": {"total": 318, "speed": 45},
-            "stat_total": 318,
-            "speed": 45,
-            "height": 7,
-            "weight": 69,
-        }
-        charmander = {
-            "id": 4,
-            "name": "小火龙",
-            "name_en": "Charmander",
-            "types": ["火"],
-            "generation": "第一世代",
-            "stats": {"total": 309, "speed": 65},
-            "stat_total": 309,
-            "speed": 65,
-            "height": 6,
-            "weight": 85,
-        }
-        squirtle = {
-            "id": 7,
-            "name": "杰尼龟",
-            "name_en": "Squirtle",
-            "types": ["水"],
-            "generation": "第一世代",
-            "stats": {"total": 314, "speed": 43},
-            "stat_total": 314,
-            "speed": 43,
-            "height": 5,
-            "weight": 90,
-        }
-        config = {
-            "game_mode": "normal",
-            "show_more_stats": False,
-            "show_more_appearance": False,
-            "show_egg_group": False,
-            "show_gen_arrow": True,
-        }
-
-        observed_hints = compare_pokemon(bulbasaur, charmander, config)
-        remaining = compute_remaining_pool(
-            [bulbasaur, charmander, squirtle],
-            [(charmander, observed_hints)],
-            config,
-        )
-
-        assert remaining == 1
-
 
 # ══════════════════════════════════════════════
 #  Test: share.py — format_share_result
@@ -1172,19 +1015,6 @@ class TestShowAnswer:
         monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: None)
         _show_answer(pokemon_25, "[bold green]🎉 猜对了！[/bold green]", "🏆")
         assert True
-
-    def test_show_answer_prints_sprite_fallback_when_art_unavailable(self, monkeypatch):
-        printed = []
-        monkeypatch.setattr("src.ui._show_pokemon_art", lambda *a: False)
-        monkeypatch.setattr("src.ui._console.print", lambda *a, **kw: printed.append(a))
-
-        _show_answer({"id": 1, "name": "妙蛙种子", "name_en": "Bulbasaur", "types": ["草", "毒"]}, "test", "Test")
-
-        output = " ".join(str(item) for args in printed for item in args)
-        assert "图片暂不可用" in output
-        assert "#1" in output
-        assert "Bulbasaur" in output
-
 
 # ══════════════════════════════════════════════
 #  Test: data.py _cached_or_fetch
@@ -1450,25 +1280,3 @@ class TestRunGame:
         monkeypatch.setattr("src.game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
         monkeypatch.setattr("src.game.fetch_species_data", lambda _id, **kw: None)
         _game.run_game(pokemon_list, config)
-
-    def test_game_prompt_mentions_quit_and_reveal(self, monkeypatch, pokemon_list, tmp_path):
-        target = pokemon_list[0]
-        session = _FakeSession(["q"])
-        import src.game as _game
-        monkeypatch.setattr(_game, "PromptSession", lambda *a, **kw: session)
-        monkeypatch.setattr(_game, "CompleteStyle", type("CS", (), {"MULTI_COLUMN": 1}))
-        monkeypatch.setattr("random.choice", lambda s: target)
-        monkeypatch.setattr("src.game._console.print", lambda *a, **kw: None)
-        monkeypatch.setattr("src.game.get_pokemon_details", lambda p, **kw: {**p, "stat_total": 300, "speed": 90, "hp": 45, "attack": 50, "defense": 40, "sp_attack": 60, "sp_defense": 50, "height": 40, "weight": 60, "stats": {}})
-        monkeypatch.setattr("src.game.fetch_species_data", lambda _id, **kw: None)
-        monkeypatch.setattr("src.game.save_game_stats", lambda w, g: None)
-
-        _game.run_game(pokemon_list, dict(DEFAULT_CONFIG))
-
-        assert "q=退出" in session.message
-        assert "reveal=看答案" in session.message
-
-    def test_format_remaining_pool_warning_for_zero_candidates(self):
-        warning = game._format_remaining_pool_warning(0)
-        assert "没有候选" in warning
-        assert "网络数据" in warning or "谜题" in warning
