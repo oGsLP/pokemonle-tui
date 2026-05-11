@@ -817,6 +817,54 @@ class TestComputeRemainingPool:
         remaining = compute_remaining_pool([pokemon_25], guesses_with_hints, default_config)
         assert remaining == 1
 
+    def test_pool_without_pokeapi_data_preserves_correct_answer(self, default_config):
+        """回归测试：pool 条目无 PokeAPI 数据 + actual_hints 含 PokeAPI 数据
+        不应全量淘汰（复现 "剩余 0 只" bug）"""
+        # 模拟 pool 条目（来自 pokemon_full_list.json，无 PokeAPI 数据）
+        guess_base: PokemonEntry = {
+            "id": 757, "index": "757", "name": "夜盗火蜥",
+            "name_en": "Salandit", "name_jp": "",
+            "types": ["毒", "火"], "generation": "第七世代",
+        }
+        target_base: PokemonEntry = {
+            "id": 997, "index": "997", "name": "冻脊龙",
+            "name_en": "Arctibax", "name_jp": "",
+            "types": ["龙", "冰"], "generation": "第九世代",
+        }
+        distractor: PokemonEntry = {
+            "id": 998, "index": "998", "name": "戟脊龙",
+            "name_en": "Baxcalibur", "name_jp": "",
+            "types": ["龙", "冰"], "generation": "第九世代",
+        }
+        pool: list[PokemonEntry] = [target_base, guess_base, distractor]
+
+        # 富化数据（模拟 get_pokemon_details 结果 — 这才是游戏实际用的）
+        target_enriched: PokemonEntry = {
+            **target_base,
+            "stat_total": 423, "speed": 62, "height": 8, "weight": 300,
+        }
+        guess_enriched: PokemonEntry = {
+            **guess_base,
+            "stat_total": 320, "speed": 77, "height": 6, "weight": 48,
+        }
+
+        actual_hints = compare_pokemon(target_enriched, guess_enriched, default_config)
+
+        # 验证 actual_hints 包含 PokeAPI 维度（否则测试无意义）
+        labels = {h.label for h in actual_hints}
+        assert "种族值" in labels, "actual_hints 缺少种族值"
+        assert len(actual_hints) >= 7, f"expected >=7 hints, got {len(actual_hints)}"
+
+        remaining = compute_remaining_pool(
+            pool, [(guess_enriched, actual_hints)], default_config,
+        )
+
+        # 旧代码会返回 0（tuple 全量比对：3 vs 7 条），修复后 >= 1
+        assert remaining >= 1, (
+            f"正确答案应存活，实际剩余 {remaining} 只 "
+            f"(pool={len(pool)}, hints={len(actual_hints)})"
+        )
+
 # ══════════════════════════════════════════════
 #  Test: share.py — format_share_result
 # ══════════════════════════════════════════════

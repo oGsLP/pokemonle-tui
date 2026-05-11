@@ -144,6 +144,12 @@ def compute_remaining_pool(
 
     A candidate survives if, for every previous guess, comparing
     candidate → guess reproduces the actual hints revealed to the player.
+
+    Hints are compared by label (e.g. "编号", "种族值"): if a candidate
+    lacks the data for a hint dimension (e.g. no stat_total from PokeAPI),
+    that hint is skipped rather than treated as a mismatch. This ensures
+    pool entries that haven't been PokeAPI-enriched yet are not
+    incorrectly eliminated.
     """
     if not guesses_with_hints:
         return len(pool)
@@ -153,8 +159,15 @@ def compute_remaining_pool(
         consistent = True
         for guess_poke, actual_hints in guesses_with_hints:
             candidate_hints = compare_pokemon(candidate, guess_poke, config)
-            if tuple(candidate_hints) != tuple(actual_hints):
-                consistent = False
+            # Compare hints by label: if a candidate lacks the data for
+            # a given dimension, be conservative and skip that comparison.
+            candidate_by_label = {h.label: h for h in candidate_hints}
+            for actual_hint in actual_hints:
+                candidate_hint = candidate_by_label.get(actual_hint.label)
+                if candidate_hint is not None and candidate_hint != actual_hint:
+                    consistent = False
+                    break
+            if not consistent:
                 break
         if consistent:
             surviving += 1
