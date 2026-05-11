@@ -14,7 +14,6 @@ from .ascii_art import show_sprite
 
 _console = Console()
 
-HINT_ICON = {"exact": "", "partial": "", "close": "", "miss": "", "far": ""}
 HINT_TAIL = {"exact": " ✓", "partial": "", "close": "", "miss": "", "far": ""}
 HINT_COLOR = {"exact": "bold green", "partial": "bold yellow", "close": "bold yellow",
               "miss": "dim", "far": "dim"}
@@ -26,6 +25,14 @@ def _hint_color(level: str) -> str:
     return HINT_COLOR.get(level, "white")
 
 
+def _hint_symbol(level: str) -> str:
+    if level == "exact":
+        return "●"
+    if level in {"partial", "close"}:
+        return "◐"
+    return "○"
+
+
 def show_logo() -> None:
     logo = r"""
   ██████╗ ██╗   ██╗ █████╗  ██████╗██╗  ██╗██╗     ███████╗███████╗
@@ -34,7 +41,7 @@ def show_logo() -> None:
   ██╔═══╝ ██║   ██║██╔══██║██║     ██╔═██╗ ██║     ██╔══╝  ╚════██║
   ██║     ╚██████╔╝██║  ██║╚██████╗██║  ██╗███████╗███████╗███████║
   ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
-  ── 宝可梦猜猜猜 CLI v2 ──
+  ── 宝可梦猜猜猜 CLI 0.2.2 ──
 """
     _console.print(Panel(
         Align.center(Text(logo, style="bold cyan")),
@@ -45,6 +52,7 @@ def show_logo() -> None:
 def _format_hint(label: str, val: str, level: str, extra: str = "") -> Text:
     color = _hint_color(level)
     t = Text(style=color)
+    _ = t.append(f"{_hint_symbol(level)} ", style=color)
     if label == "属性" and val:
         matched_types = set(extra.split("/")) if extra else set()
         for idx, type_name in enumerate(val.split("/")):
@@ -89,12 +97,13 @@ def show_hints_table(guesses_with_hints: list[GuessRecord], max_guesses: int, co
         title=title,
         title_style="bold yellow",
         padding=(0, 1),
+        expand=False,
     )
     table.add_column("#", style="dim", width=3, justify="right")
-    table.add_column("中文名", style="bold", width=10)
-    table.add_column("英文名", style="dim", width=14)
+    table.add_column("中文名", style="bold", width=10, overflow="fold")
+    table.add_column("英文名", style="dim", width=14, overflow="fold")
     for k in header_keys:
-        table.add_column(k, justify="center", no_wrap=True)
+        table.add_column(k, justify="center")
 
     rows = list(reversed(guesses_with_hints)) if config.get("reverse_order") else guesses_with_hints
 
@@ -160,7 +169,7 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         opts = [
             ("show_more_stats", "显示更多种族值 (HP/攻击/防御/特攻/特防)", "m"),
             ("show_more_appearance", "显示更多外形信息 (体型比较)", "p"),
-            ("show_egg_group", "显示蛋组/捕获率信息", "g"),
+            ("show_egg_group", "显示蛋组信息", "g"),
             ("show_gen_arrow", "开启世代箭头提示", "r"),
             ("reverse_order", "猜测反向显示 (最新在上)", "o"),
             ("mischief", "小小的恶作剧 (随机干扰提示)", "i"),
@@ -169,7 +178,7 @@ def show_settings(config: ConfigDict) -> ConfigDict:
             mark = "[green]✓[/green]" if cfg.get(key) else "[red]✗[/red]"
             _console.print(f"    {mark} {i}. {label}  [dim]({shortcut} 切换)[/dim]")
 
-        _console.print(f"\n  [cyan]a[/cyan]=全选世代  [cyan]n[/cyan]=取消全选  [cyan]s[/cyan]=保存  [cyan]q[/cyan]=取消")
+        _console.print(f"\n  [cyan]a[/cyan]=全选世代  [cyan]n[/cyan]=重置为全部世代  [cyan]s[/cyan]=保存  [cyan]q[/cyan]=取消")
 
         try:
             choice = _console.input("\n  > ").strip().lower()
@@ -188,7 +197,7 @@ def show_settings(config: ConfigDict) -> ConfigDict:
         elif choice == "a":
             cfg["generations"] = list(ALL_GENERATIONS)
         elif choice == "n":
-            cfg["generations"] = []
+            cfg["generations"] = list(ALL_GENERATIONS)
         elif choice in ("1", "2", "3"):
             cfg["game_mode"] = {"1": "normal", "2": "hard", "3": "easy"}[choice]
             preset = GAME_MODE_PRESETS.get(cfg["game_mode"], {})
@@ -220,8 +229,8 @@ def show_settings(config: ConfigDict) -> ConfigDict:
                 cfg[key] = not cfg.get(key, False)
 
 
-def _show_pokemon_art(name_en: str, pokemon_id: int) -> None:
-    show_sprite(name_en, pokemon_id, console=_console)
+def _show_pokemon_art(name_en: str, pokemon_id: int) -> bool:
+    return show_sprite(name_en, pokemon_id, console=_console)
 
 
 def _show_answer(target: PokemonEntry, preamble: str, style: str) -> None:
@@ -232,4 +241,6 @@ def _show_answer(target: PokemonEntry, preamble: str, style: str) -> None:
         ),
         border_style="dim", title=style,
     ))
-    _show_pokemon_art(target["name_en"], target["id"])
+    shown_art = _show_pokemon_art(target["name_en"], target["id"])
+    if not shown_art:
+        _console.print(f"[dim]图片暂不可用：#{target['id']} {target['name_en']}[/dim]")

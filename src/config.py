@@ -27,6 +27,8 @@ def _validate_config(cfg: JsonObject) -> JsonObject:
             validated[k] = val if isinstance(val, list) else default
         else:
             validated[k] = val if isinstance(val, type(default)) else default
+    # Empty generation lists are normalized to all generations so users cannot
+    # save a config that makes the game impossible to start.
     if isinstance(validated.get("generations"), list) and not validated["generations"]:
         validated["generations"] = list(constants.ALL_GENERATIONS)
     return validated
